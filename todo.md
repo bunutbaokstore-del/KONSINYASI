@@ -62,3 +62,13 @@
 - [x] Menghubungkan pemulihan kata sandi dan deep link reset
 - [x] Menjalankan pemeriksaan TypeScript, lint, dan test
 - [ ] Menyimpan checkpoint migrasi Supabase
+
+## Pengujian Android Supabase Auth
+
+- [x] Membuka aplikasi KONSINYASI di perangkat Android melalui Expo Go atau build Android
+- [x] Menguji pendaftaran dengan email uji baru
+- [x] Mengonfirmasi email pendaftaran
+- [x] Menguji login dengan credential yang benar
+- [ ] Menguji penolakan credential yang salah
+- [x] Menguji logout dan persistensi sesi
+- [x] Mencatat error atau hasil pengujian dari perangkat
