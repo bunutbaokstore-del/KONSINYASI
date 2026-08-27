@@ -208,3 +208,16 @@
 - [x] Menghapus redirect login ke Change Password untuk akun bawahan baru
 - [x] Mengubah label dan penjelasan Password awal pada Manajemen Pengguna
 - [x] Memvalidasi login, TypeScript, lint, dan test
+
+## Data Pengguna Lengkap dan KTP
+
+- [x] Mendokumentasikan struktur data profil, kontak, dan KTP
+- [x] Menyiapkan tabel profil pengguna dan kontak darurat
+- [x] Menyiapkan storage privat untuk foto KTP
+- [x] Menambahkan field identitas, kontak, alamat, dan KTP pada form Tambah Pengguna
+- [x] Menambahkan password dan konfirmasi password dengan validasi kecocokan
+- [x] Mewajibkan upload KTP untuk semua role
+- [x] Menerapkan pembatasan akses data profil dan dokumen KTP
+- [x] Memastikan form pendaftaran Distributor juga mengumpulkan profil lengkap dan KTP wajib
+- [x] Memvalidasi TypeScript, lint, dan test
+- [ ] Menguji alur pendaftaran Distributor dan Tambah Pengguna di Android secara manual

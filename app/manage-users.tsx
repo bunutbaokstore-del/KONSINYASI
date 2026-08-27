@@ -5,15 +5,19 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { APP_ROLES, MANAGED_ROLES, ROLE_LABELS, type AppRole } from "@/shared/auth";
 import { trpc } from "@/lib/trpc";
+import { isValidPhone, isValidProfileAddress, isValidProfileName, normalizePhone, type KtpUpload } from "@/shared/user-profile";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -42,6 +46,13 @@ export default function ManageUsersScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [emergencyContactName, setEmergencyContactName] = useState("");
+  const [emergencyContactRelation, setEmergencyContactRelation] = useState("");
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [ktpUpload, setKtpUpload] = useState<KtpUpload | null>(null);
   const [role, setRole] = useState<AppRole>(currentRole === "admin" ? "mitra_umkm" : "admin");
   const [status, setStatus] = useState<"active" | "disabled">("active");
   const [formError, setFormError] = useState<string | null>(null);
@@ -85,6 +96,13 @@ export default function ManageUsersScreen() {
     setName("");
     setEmail("");
     setPassword("");
+    setConfirmPassword("");
+    setPhone("");
+    setEmergencyContactName("");
+    setEmergencyContactRelation("");
+    setEmergencyContactPhone("");
+    setAddress("");
+    setKtpUpload(null);
     setStatus("active");
     setRole(currentRole === "admin" ? "mitra_umkm" : "admin");
     setFormError(null);
@@ -106,6 +124,38 @@ export default function ManageUsersScreen() {
     setFormError(null);
   }
 
+  async function selectKtp() {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [16, 10],
+        quality: 0.75,
+        base64: true,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.base64) {
+        setFormError("Foto KTP belum dapat dibaca. Silakan pilih foto lain.");
+        return;
+      }
+      if ((asset.fileSize ?? 0) > 5 * 1024 * 1024) {
+        setFormError("Ukuran foto KTP maksimal 5 MB.");
+        return;
+      }
+      setKtpUpload({
+        uri: asset.uri,
+        base64: asset.base64,
+        contentType: "image/jpeg",
+        originalName: asset.fileName ?? `ktp-${Date.now()}.jpg`,
+        fileSize: asset.fileSize,
+      });
+      setFormError(null);
+    } catch {
+      setFormError("Foto KTP belum dapat dipilih. Coba lagi.");
+    }
+  }
+
   async function submitForm() {
     const normalizedName = name.trim();
     const normalizedEmail = email.trim().toLowerCase();
@@ -117,9 +167,39 @@ export default function ManageUsersScreen() {
       setFormError("Masukkan email login yang valid.");
       return;
     }
-    if (!editingUser && password.length < 8) {
-      setFormError("Password login minimal 8 karakter.");
-      return;
+    if (!editingUser) {
+      if (!isValidPhone(phone)) {
+        setFormError("Masukkan nomor HP yang valid.");
+        return;
+      }
+      if (!isValidProfileName(emergencyContactName)) {
+        setFormError("Masukkan nama kontak darurat.");
+        return;
+      }
+      if (emergencyContactRelation.trim().length < 2) {
+        setFormError("Masukkan hubungan kontak darurat.");
+        return;
+      }
+      if (!isValidPhone(emergencyContactPhone)) {
+        setFormError("Masukkan nomor HP kontak darurat yang valid.");
+        return;
+      }
+      if (!isValidProfileAddress(address)) {
+        setFormError("Masukkan alamat lengkap minimal 10 karakter.");
+        return;
+      }
+      if (password.length < 8) {
+        setFormError("Password login minimal 8 karakter.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setFormError("Konfirmasi password tidak sama.");
+        return;
+      }
+      if (!ktpUpload) {
+        setFormError("Foto KTP wajib diunggah untuk semua role.");
+        return;
+      }
     }
 
     setFormError(null);
@@ -134,9 +214,18 @@ export default function ManageUsersScreen() {
       return;
     }
 
+    if (!ktpUpload) return;
     await createUser.mutateAsync({
       name: normalizedName,
       email: normalizedEmail,
+      phone: normalizePhone(phone),
+      emergencyContactName: emergencyContactName.trim(),
+      emergencyContactRelation: emergencyContactRelation.trim(),
+      emergencyContactPhone: normalizePhone(emergencyContactPhone),
+      address: address.trim(),
+      ktpBase64: ktpUpload.base64,
+      ktpContentType: ktpUpload.contentType,
+      ktpOriginalName: ktpUpload.originalName,
       password,
       role,
     });
@@ -189,15 +278,50 @@ export default function ManageUsersScreen() {
                 <AppIcon name="close" size={22} color={colors.muted} />
               </Pressable>
             </View>
+            <ScrollView style={styles.formScroll} contentContainerStyle={styles.formScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <Text style={[styles.label, { color: colors.foreground }]}>Nama lengkap</Text>
             <TextInput value={name} onChangeText={setName} placeholder="Nama pengguna" placeholderTextColor={colors.muted} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
             <Text style={[styles.label, { color: colors.foreground }]}>Email login</Text>
             <TextInput value={email} onChangeText={setEmail} editable={!editingUser || editingUser.id !== currentUserId} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} placeholder="nama@perusahaan.com" placeholderTextColor={colors.muted} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
             {!editingUser ? (
               <>
+                <Text style={[styles.label, { color: colors.foreground }]}>Nomor HP</Text>
+                <TextInput value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="08xxxxxxxxxx" placeholderTextColor={colors.muted} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
+                <Text style={[styles.label, { color: colors.foreground }]}>Nama kontak darurat</Text>
+                <TextInput value={emergencyContactName} onChangeText={setEmergencyContactName} placeholder="Nama kontak darurat" placeholderTextColor={colors.muted} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
+                <Text style={[styles.label, { color: colors.foreground }]}>Hubungan kontak darurat</Text>
+                <TextInput value={emergencyContactRelation} onChangeText={setEmergencyContactRelation} placeholder="Contoh: Suami, Istri, Orang tua" placeholderTextColor={colors.muted} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
+                <Text style={[styles.label, { color: colors.foreground }]}>Nomor kontak darurat</Text>
+                <TextInput value={emergencyContactPhone} onChangeText={setEmergencyContactPhone} keyboardType="phone-pad" placeholder="08xxxxxxxxxx" placeholderTextColor={colors.muted} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
+                <Text style={[styles.label, { color: colors.foreground }]}>Alamat lengkap</Text>
+                <TextInput value={address} onChangeText={setAddress} multiline numberOfLines={3} textAlignVertical="top" placeholder="Jalan, nomor, RT/RW, kelurahan, kecamatan, kota" placeholderTextColor={colors.muted} style={[styles.input, styles.addressInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
+                <Text style={[styles.label, { color: colors.foreground }]}>Foto KTP</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel={ktpUpload ? "Ganti foto KTP" : "Unggah foto KTP"} onPress={() => void selectKtp()} style={({ pressed }) => [styles.uploadCard, { borderColor: ktpUpload ? colors.primary : colors.border, backgroundColor: colors.background }, pressed && styles.pressed]}>
+                  {ktpUpload ? (
+                    <>
+                      <Image source={{ uri: ktpUpload.uri }} style={styles.ktpPreview} />
+                      <View style={styles.uploadCopy}>
+                        <Text style={[styles.uploadTitle, { color: colors.foreground }]}>Foto KTP dipilih</Text>
+                        <Text style={[styles.uploadMeta, { color: colors.muted }]} numberOfLines={1}>{ktpUpload.originalName}</Text>
+                        <Text style={[styles.uploadAction, { color: colors.primary }]}>Ketuk untuk mengganti</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={[styles.uploadIcon, { backgroundColor: `${colors.primary}16` }]}><AppIcon name="upload" size={23} color={colors.primary} /></View>
+                      <View style={styles.uploadCopy}>
+                        <Text style={[styles.uploadTitle, { color: colors.foreground }]}>Unggah foto KTP</Text>
+                        <Text style={[styles.uploadMeta, { color: colors.muted }]}>JPG, PNG, atau WEBP · maksimal 5 MB</Text>
+                      </View>
+                    </>
+                  )}
+                </Pressable>
+                <Text style={[styles.helper, { color: colors.muted }]}>Wajib untuk semua role. Foto disimpan secara privat dan hanya dapat diakses sesuai kewenangan.</Text>
                 <Text style={[styles.label, { color: colors.foreground }]}>Password login</Text>
                 <PasswordInput value={password} onChangeText={setPassword} placeholder="Minimal 8 karakter" placeholderTextColor={colors.muted} colors={{ ...colors, surface: colors.background }} />
-                <Text style={[styles.helper, { color: colors.muted }]}>Sampaikan password ini melalui jalur pribadi. Password ini digunakan untuk login seterusnya dan tidak dapat dilihat kembali setelah akun dibuat.</Text>
+                <Text style={[styles.label, { color: colors.foreground }]}>Konfirmasi password</Text>
+                <PasswordInput value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Ulangi password login" placeholderTextColor={colors.muted} colors={{ ...colors, surface: colors.background }} />
+                <Text style={[styles.helper, { color: colors.muted }]}>Password ini digunakan untuk login seterusnya. Konfirmasi password hanya untuk pemeriksaan dan tidak disimpan.</Text>
               </>
             ) : null}
             <Text style={[styles.label, { color: colors.foreground }]}>Role</Text>
@@ -224,6 +348,7 @@ export default function ManageUsersScreen() {
             <Pressable accessibilityRole="button" disabled={busy} onPress={() => void submitForm()} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed, busy && styles.disabled]}>
               {busy ? <ActivityIndicator color={colors.background} /> : <Text style={[styles.primaryButtonText, { color: colors.background }]}>{editingUser ? "Simpan perubahan" : "Buat akun"}</Text>}
             </Pressable>
+            </ScrollView>
           </View>
         ) : (
           <Pressable accessibilityRole="button" onPress={openCreate} style={({ pressed }) => [styles.addButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}>
@@ -289,11 +414,21 @@ const styles = StyleSheet.create({
   addButton: { minHeight: 52, borderRadius: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 14 },
   addButtonText: { fontSize: 15, fontWeight: "800" },
   formCard: { borderWidth: 1, borderRadius: 20, padding: 16, marginTop: 14 },
+  formScroll: { maxHeight: 590 },
+  formScrollContent: { paddingBottom: 2 },
   formHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
   formTitle: { fontSize: 18, fontWeight: "800" },
   label: { fontSize: 12, fontWeight: "800", marginTop: 12, marginBottom: 6 },
   input: { minHeight: 48, borderWidth: 1, borderRadius: 13, paddingHorizontal: 13, fontSize: 14 },
+  addressInput: { minHeight: 88, paddingTop: 13, paddingBottom: 13 },
   helper: { fontSize: 11, lineHeight: 16, marginTop: 6 },
+  uploadCard: { minHeight: 86, borderWidth: 1, borderRadius: 14, padding: 10, flexDirection: "row", alignItems: "center", gap: 10 },
+  uploadIcon: { width: 46, height: 46, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  ktpPreview: { width: 68, height: 48, borderRadius: 9, backgroundColor: "#DDE5E2" },
+  uploadCopy: { flex: 1 },
+  uploadTitle: { fontSize: 13, fontWeight: "800" },
+  uploadMeta: { fontSize: 10, marginTop: 3 },
+  uploadAction: { fontSize: 11, fontWeight: "700", marginTop: 4 },
   roleGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   roleChip: { minHeight: 38, borderRadius: 12, borderWidth: 1, paddingHorizontal: 11, alignItems: "center", justifyContent: "center" },
   roleChipText: { fontSize: 12, fontWeight: "700" },

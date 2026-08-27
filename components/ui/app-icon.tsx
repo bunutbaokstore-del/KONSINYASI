@@ -22,7 +22,8 @@ export type AppIconName =
   | "send"
   | "code"
   | "eye"
-  | "eye-off";
+  | "eye-off"
+  | "upload";
 
 type AppIconProps = {
   name: AppIconName;
@@ -79,5 +80,7 @@ export function AppIcon({ name, size = 24, color, strokeWidth = 2 }: AppIconProp
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M3.5 12s3.1-5 8.5-5 8.5 5 8.5 5-3.1 5-8.5 5-8.5-5-8.5-5z" /><Circle {...common} cx="12" cy="12" r="2.1" /></Svg>;
     case "eye-off":
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="m4 4 16 16M10.6 6.9A9.3 9.3 0 0 1 12 7c5.4 0 8.5 5 8.5 5a16 16 0 0 1-3 3.2M6.3 6.8C4.4 8.1 3.5 10 3.5 10s3.1 5 8.5 5c.5 0 1-.1 1.5-.1M9.9 9.9a3 3 0 0 0 4.2 4.2" /></Svg>;
+    case "upload":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M12 16V4M7.5 8.5 12 4l4.5 4.5M5 14.5v4h14v-4" /></Svg>;
   }
 }

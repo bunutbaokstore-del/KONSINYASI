@@ -3,6 +3,26 @@ import type { Request } from "express";
 import type { AppRole } from "../shared/auth";
 
 let adminClient: SupabaseClient | null = null;
+let publicClient: SupabaseClient | null = null;
+
+export function getSupabasePublicClient() {
+  if (publicClient) return publicClient;
+
+  const url = process.env.SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !publishableKey) {
+    throw new Error("Supabase public credentials are not configured");
+  }
+
+  publicClient = createClient(url, publishableKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  });
+  return publicClient;
+}
 
 export function getSupabaseAdminClient() {
   if (adminClient) return adminClient;
