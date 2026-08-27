@@ -8,6 +8,7 @@ import "react-native-reanimated";
 import { Platform } from "react-native";
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
+import { SupabaseAuthProvider } from "@/lib/supabase-auth-provider";
 import {
   SafeAreaFrameContext,
   SafeAreaInsetsContext,
@@ -88,6 +89,8 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="oauth/callback" />
+            <Stack.Screen name="auth/callback" />
+            <Stack.Screen name="reset-password" />
           </Stack>
           <StatusBar style="auto" />
         </QueryClientProvider>
@@ -96,6 +99,7 @@ export default function RootLayout() {
   );
 
   const shouldOverrideSafeArea = Platform.OS === "web";
+  const authContent = <SupabaseAuthProvider>{content}</SupabaseAuthProvider>;
 
   if (shouldOverrideSafeArea) {
     return (
@@ -103,7 +107,7 @@ export default function RootLayout() {
         <SafeAreaProvider initialMetrics={providerInitialMetrics}>
           <SafeAreaFrameContext.Provider value={frame}>
             <SafeAreaInsetsContext.Provider value={insets}>
-              {content}
+              {authContent}
             </SafeAreaInsetsContext.Provider>
           </SafeAreaFrameContext.Provider>
         </SafeAreaProvider>
@@ -113,7 +117,7 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <SafeAreaProvider initialMetrics={providerInitialMetrics}>{content}</SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={providerInitialMetrics}>{authContent}</SafeAreaProvider>
     </ThemeProvider>
   );
 }

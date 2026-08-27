@@ -1,8 +1,8 @@
-import { startOAuthLogin } from "@/constants/oauth";
 import { ScreenContainer } from "@/components/screen-container";
+import { AppIcon } from "@/components/ui/app-icon";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
-import { AppIcon } from "@/components/ui/app-icon";
+import { useSupabaseAuth } from "@/lib/supabase-auth-provider";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -10,6 +10,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 
@@ -17,17 +18,29 @@ export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
   const { user, loading, isAuthenticated, logout } = useAuth();
+  const { signIn } = useSupabaseAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const handleLogin = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+      setLoginError("Masukkan alamat email yang valid.");
+      return;
+    }
+    if (!password) {
+      setLoginError("Masukkan kata sandi Anda.");
+      return;
+    }
+
     setLoginLoading(true);
     setLoginError(null);
-    try {
-      await startOAuthLogin();
-    } catch {
-      setLoginLoading(false);
-      setLoginError("Login belum dapat dimulai. Silakan coba lagi.");
+    const { error } = await signIn(normalizedEmail, password);
+    setLoginLoading(false);
+    if (error) {
+      setLoginError("Email atau kata sandi tidak benar, atau email belum dikonfirmasi.");
     }
   };
 
@@ -55,14 +68,41 @@ export default function HomeScreen() {
             <AppIcon name="verified-user" size={22} color={colors.primary} />
             <View style={styles.infoCopy}>
               <Text style={[styles.infoTitle, { color: colors.foreground }]}>Akses aman dan praktis</Text>
-              <Text style={[styles.infoText, { color: colors.muted }]}>Gunakan akun Anda untuk melanjutkan ke ruang kerja KONSINYASI.</Text>
+              <Text style={[styles.infoText, { color: colors.muted }]}>Gunakan email dan kata sandi akun Anda untuk masuk ke ruang kerja KONSINYASI.</Text>
             </View>
+          </View>
+
+          <View style={styles.form}>
+            <Text style={[styles.inputLabel, { color: colors.foreground }]}>Email</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="nama@email.com"
+              placeholderTextColor={colors.muted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="emailAddress"
+              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.surface }]}
+            />
+            <Text style={[styles.inputLabel, { color: colors.foreground }]}>Kata sandi</Text>
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Masukkan kata sandi"
+              placeholderTextColor={colors.muted}
+              secureTextEntry
+              textContentType="password"
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
+              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.surface }]}
+            />
           </View>
 
           {loginError ? <Text style={[styles.errorText, { color: colors.error }]}>{loginError}</Text> : null}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Masuk dengan akun"
+            accessibilityLabel="Masuk dengan email dan kata sandi"
             disabled={loginLoading}
             onPress={handleLogin}
             style={({ pressed }) => [
@@ -72,7 +112,7 @@ export default function HomeScreen() {
               loginLoading && styles.disabled,
             ]}
           >
-            {loginLoading ? <ActivityIndicator color={colors.background} /> : <Text style={[styles.primaryButtonText, { color: colors.background }]}>Masuk dengan akun</Text>}
+            {loginLoading ? <ActivityIndicator color={colors.background} /> : <Text style={[styles.primaryButtonText, { color: colors.background }]}>Masuk</Text>}
           </Pressable>
           <View style={styles.linkRow}>
             <Pressable onPress={() => router.push("/register")} accessibilityRole="button">
@@ -83,7 +123,7 @@ export default function HomeScreen() {
               <Text style={[styles.linkText, { color: colors.primary }]}>Lupa kata sandi?</Text>
             </Pressable>
           </View>
-          <Text style={[styles.legalText, { color: colors.muted }]}>Dengan masuk, Anda melanjutkan ke layanan autentikasi KONSINYASI.</Text>
+          <Text style={[styles.legalText, { color: colors.muted }]}>Dengan masuk, Anda menyetujui proses autentikasi aman KONSINYASI.</Text>
         </View>
       </ScreenContainer>
     );
@@ -130,17 +170,20 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 1.7, textAlign: "center", marginBottom: 10 },
   title: { fontSize: 32, lineHeight: 39, fontWeight: "800", textAlign: "center", letterSpacing: -0.7 },
   subtitle: { fontSize: 16, lineHeight: 24, textAlign: "center", marginTop: 12, maxWidth: 340 },
-  infoCard: { flexDirection: "row", width: "100%", borderWidth: 1, borderRadius: 18, padding: 16, marginTop: 28, alignItems: "flex-start" },
+  infoCard: { flexDirection: "row", width: "100%", borderWidth: 1, borderRadius: 18, padding: 16, marginTop: 22, alignItems: "flex-start" },
   infoCopy: { flex: 1, marginLeft: 12 },
   infoTitle: { fontSize: 15, fontWeight: "700", marginBottom: 4 },
   infoText: { fontSize: 13, lineHeight: 19 },
+  form: { width: "100%", marginTop: 18 },
+  inputLabel: { fontSize: 13, fontWeight: "700", marginBottom: 7, marginTop: 10 },
+  input: { minHeight: 52, borderWidth: 1, borderRadius: 14, paddingHorizontal: 15, fontSize: 15 },
   primaryButton: { width: "100%", minHeight: 54, borderRadius: 16, alignItems: "center", justifyContent: "center", marginTop: 18 },
   primaryButtonText: { fontSize: 16, fontWeight: "800" },
   linkRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 16 },
   linkText: { fontSize: 13, fontWeight: "800" },
   linkDivider: { fontSize: 13 },
   legalText: { fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 14, maxWidth: 310 },
-  errorText: { width: "100%", fontSize: 13, lineHeight: 19, textAlign: "center", marginTop: 16 },
+  errorText: { width: "100%", fontSize: 13, lineHeight: 19, textAlign: "center", marginTop: 12 },
   loadingText: { marginTop: 14, fontSize: 14 },
   homeContent: { flex: 1, paddingTop: 14 },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

@@ -1,7 +1,7 @@
-import { startOAuthLogin } from "@/constants/oauth";
 import { ScreenContainer } from "@/components/screen-container";
-import { useColors } from "@/hooks/use-colors";
 import { AppIcon } from "@/components/ui/app-icon";
+import { useColors } from "@/hooks/use-colors";
+import { useSupabaseAuth } from "@/lib/supabase-auth-provider";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -9,24 +9,34 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 export default function RegisterScreen() {
   const colors = useColors();
   const router = useRouter();
+  const { signUp } = useSupabaseAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   const handleRegister = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
     if (!name.trim()) return setError("Nama lengkap wajib diisi.");
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setError("Masukkan alamat email yang valid.");
+    if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) return setError("Masukkan alamat email yang valid.");
     if (password.length < 8) return setError("Kata sandi minimal 8 karakter.");
+
     setError(null);
     setLoading(true);
-    try {
-      // Akun dikelola oleh portal autentikasi resmi; data form hanya divalidasi di sisi aplikasi.
-      await startOAuthLogin();
-    } catch {
-      setLoading(false);
-      setError("Pendaftaran belum dapat dimulai. Silakan coba lagi.");
+    const result = await signUp(normalizedEmail, password, name.trim());
+    setLoading(false);
+
+    if (result.error) {
+      setError(result.error.message.toLowerCase().includes("already") ? "Email tersebut sudah terdaftar." : "Pendaftaran belum dapat diproses. Silakan periksa data Anda dan coba lagi.");
+      return;
+    }
+
+    if (result.hasSession) {
+      router.replace("/");
+    } else {
+      setSubmitted(true);
     }
   };
 
@@ -37,18 +47,35 @@ export default function RegisterScreen() {
           <AppIcon name="arrow-back" size={22} color={colors.foreground} />
           <Text style={[styles.backText, { color: colors.foreground }]}>Kembali</Text>
         </Pressable>
-        <Text style={[styles.eyebrow, { color: colors.primary }]}>AKUN BARU</Text>
-        <Text style={[styles.title, { color: colors.foreground }]}>Buat akun KONSINYASI</Text>
-        <Text style={[styles.subtitle, { color: colors.muted }]}>Lengkapi data Anda untuk mulai menggunakan KONSINYASI.</Text>
 
-        <Field label="Nama lengkap" value={name} onChangeText={setName} placeholder="Nama Anda" colors={colors} autoCapitalize="words" />
-        <Field label="Email" value={email} onChangeText={setEmail} placeholder="nama@email.com" colors={colors} keyboardType="email-address" autoCapitalize="none" />
-        <Field label="Kata sandi" value={password} onChangeText={setPassword} placeholder="Minimal 8 karakter" colors={colors} secureTextEntry />
-        {error ? <Text style={[styles.error, { color: colors.error }]}>{error}</Text> : null}
-        <Pressable disabled={loading} onPress={handleRegister} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed, loading && styles.disabled]}>
-          {loading ? <ActivityIndicator color={colors.background} /> : <Text style={[styles.primaryText, { color: colors.background }]}>Daftar dan lanjutkan</Text>}
-        </Pressable>
-        <Text style={[styles.note, { color: colors.muted }]}>Autentikasi akun dilanjutkan melalui layanan resmi KONSINYASI.</Text>
+        {submitted ? (
+          <View style={styles.successContent}>
+            <View style={[styles.successIcon, { backgroundColor: `${colors.success}18` }]}>
+              <AppIcon name="verified" size={32} color={colors.success} />
+            </View>
+            <Text style={[styles.eyebrow, { color: colors.primary }]}>KONFIRMASI EMAIL</Text>
+            <Text style={[styles.title, { color: colors.foreground }]}>Periksa kotak masuk Anda</Text>
+            <Text style={[styles.subtitle, { color: colors.muted }]}>Tautan konfirmasi telah dikirim ke {email.trim()}. Konfirmasi email tersebut sebelum masuk ke KONSINYASI.</Text>
+            <Pressable onPress={() => router.replace("/")} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}>
+              <Text style={[styles.primaryText, { color: colors.background }]}>Kembali ke login</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            <Text style={[styles.eyebrow, { color: colors.primary }]}>AKUN BARU</Text>
+            <Text style={[styles.title, { color: colors.foreground }]}>Buat akun KONSINYASI</Text>
+            <Text style={[styles.subtitle, { color: colors.muted }]}>Lengkapi data Anda untuk mulai menggunakan KONSINYASI.</Text>
+
+            <Field label="Nama lengkap" value={name} onChangeText={setName} placeholder="Nama Anda" colors={colors} autoCapitalize="words" />
+            <Field label="Email" value={email} onChangeText={setEmail} placeholder="nama@email.com" colors={colors} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+            <Field label="Kata sandi" value={password} onChangeText={setPassword} placeholder="Minimal 8 karakter" colors={colors} secureTextEntry returnKeyType="done" onSubmitEditing={handleRegister} />
+            {error ? <Text style={[styles.error, { color: colors.error }]}>{error}</Text> : null}
+            <Pressable disabled={loading} onPress={handleRegister} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed, loading && styles.disabled]}>
+              {loading ? <ActivityIndicator color={colors.background} /> : <Text style={[styles.primaryText, { color: colors.background }]}>Daftar dan lanjutkan</Text>}
+            </Pressable>
+            <Text style={[styles.note, { color: colors.muted }]}>Kami akan mengirim tautan konfirmasi ke email Anda.</Text>
+          </>
+        )}
       </View>
     </ScreenContainer>
   );
@@ -65,8 +92,10 @@ function Field({ label, value, onChangeText, placeholder, colors, ...props }: { 
 
 const styles = StyleSheet.create({
   content: { flex: 1, paddingTop: 12 },
+  successContent: { flex: 1, justifyContent: "center", alignItems: "center", paddingBottom: 48 },
   backButton: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 36 },
   backText: { fontSize: 15, fontWeight: "700" },
+  successIcon: { width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 22 },
   eyebrow: { fontSize: 12, fontWeight: "800", letterSpacing: 1.6, marginBottom: 8 },
   title: { fontSize: 30, lineHeight: 37, fontWeight: "800", letterSpacing: -0.6 },
   subtitle: { fontSize: 15, lineHeight: 22, marginTop: 10, marginBottom: 24 },
@@ -74,7 +103,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontWeight: "700", marginBottom: 7 },
   input: { minHeight: 52, borderWidth: 1, borderRadius: 14, paddingHorizontal: 15, fontSize: 15 },
   error: { fontSize: 13, lineHeight: 19, marginTop: 0 },
-  primaryButton: { minHeight: 54, borderRadius: 16, alignItems: "center", justifyContent: "center", marginTop: 18 },
+  primaryButton: { minHeight: 54, borderRadius: 16, alignItems: "center", justifyContent: "center", marginTop: 18, width: "100%" },
   primaryText: { fontSize: 16, fontWeight: "800" },
   note: { fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 13 },
   pressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
