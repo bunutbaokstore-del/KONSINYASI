@@ -117,7 +117,7 @@ export const appRouter = router({
           email: input.email,
           password: input.password,
           email_confirm: true,
-          user_metadata: { full_name: input.name, must_change_password: true },
+          user_metadata: { full_name: input.name },
           app_metadata: appMetadata,
         });
         if (error || !data.user) {

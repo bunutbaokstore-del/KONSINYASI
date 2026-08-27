@@ -14,7 +14,6 @@ export type AppUser = {
   role: AppRole;
   status: AccountStatus;
   distributorId: string;
-  mustChangePassword: boolean;
 };
 
 type UseAuthOptions = {
@@ -27,8 +26,8 @@ export function useAuth(options?: UseAuthOptions) {
 
   const user = useMemo<AppUser | null>(() => {
     if (!authUser) return null;
-    const metadata = authUser.user_metadata as { full_name?: string; name?: string; must_change_password?: unknown } | undefined;
-    const appMetadata = authUser.app_metadata as { role?: unknown; status?: unknown; distributor_id?: unknown; must_change_password?: unknown } | undefined;
+    const metadata = authUser.user_metadata as { full_name?: string; name?: string } | undefined;
+    const appMetadata = authUser.app_metadata as { role?: unknown; status?: unknown; distributor_id?: unknown } | undefined;
     const role = roleFromMetadata(appMetadata?.role);
     const fallbackName = authUser.email?.split("@")[0] || "Pengguna KONSINYASI";
     const distributorId = typeof appMetadata?.distributor_id === "string" ? appMetadata.distributor_id : authUser.id;
@@ -42,7 +41,6 @@ export function useAuth(options?: UseAuthOptions) {
       role,
       status: appMetadata?.status === "disabled" ? "disabled" : "active",
       distributorId,
-      mustChangePassword: appMetadata?.must_change_password === true || metadata?.must_change_password === true,
     };
   }, [authUser]);
 

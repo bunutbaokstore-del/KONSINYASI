@@ -118,7 +118,7 @@ export default function ManageUsersScreen() {
       return;
     }
     if (!editingUser && password.length < 8) {
-      setFormError("Password awal minimal 8 karakter.");
+      setFormError("Password login minimal 8 karakter.");
       return;
     }
 
@@ -195,9 +195,9 @@ export default function ManageUsersScreen() {
             <TextInput value={email} onChangeText={setEmail} editable={!editingUser || editingUser.id !== currentUserId} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} placeholder="nama@perusahaan.com" placeholderTextColor={colors.muted} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
             {!editingUser ? (
               <>
-                <Text style={[styles.label, { color: colors.foreground }]}>Password awal</Text>
+                <Text style={[styles.label, { color: colors.foreground }]}>Password login</Text>
                 <PasswordInput value={password} onChangeText={setPassword} placeholder="Minimal 8 karakter" placeholderTextColor={colors.muted} colors={{ ...colors, surface: colors.background }} />
-                <Text style={[styles.helper, { color: colors.muted }]}>Sampaikan password awal melalui jalur pribadi. Password tidak dapat dilihat kembali setelah akun dibuat.</Text>
+                <Text style={[styles.helper, { color: colors.muted }]}>Sampaikan password ini melalui jalur pribadi. Password ini digunakan untuk login seterusnya dan tidak dapat dilihat kembali setelah akun dibuat.</Text>
               </>
             ) : null}
             <Text style={[styles.label, { color: colors.foreground }]}>Role</Text>

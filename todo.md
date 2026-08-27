@@ -200,3 +200,11 @@
 - [x] Menolak pembuatan akun Distributor pada validasi server
 - [x] Memastikan akun Distributor aktif tidak dapat dihapus atau diturunkan rolenya
 - [x] Memvalidasi TypeScript, lint, test, dan alur Manajemen Pengguna
+
+## Password Tetap Akun Bawahan
+
+- [x] Mendokumentasikan aturan password tetap
+- [x] Menghapus penetapan wajib ganti password saat membuat akun
+- [x] Menghapus redirect login ke Change Password untuk akun bawahan baru
+- [x] Mengubah label dan penjelasan Password awal pada Manajemen Pengguna
+- [x] Memvalidasi login, TypeScript, lint, dan test

@@ -6,7 +6,7 @@ import { useColors } from "@/hooks/use-colors";
 import { useSupabaseAuth } from "@/lib/supabase-auth-provider";
 import { ROLE_LABELS } from "@/shared/auth";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -25,12 +25,6 @@ export default function HomeScreen() {
   const [password, setPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isAuthenticated && user?.mustChangePassword) {
-      router.replace("/change-password");
-    }
-  }, [isAuthenticated, router, user?.mustChangePassword]);
 
   const handleLogin = async () => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -132,15 +126,6 @@ export default function HomeScreen() {
           </View>
           <Text style={[styles.legalText, { color: colors.muted }]}>Dengan masuk, Anda menyetujui proses autentikasi aman KONSINYASI.</Text>
         </View>
-      </ScreenContainer>
-    );
-  }
-
-  if (user?.mustChangePassword) {
-    return (
-      <ScreenContainer edges={["top", "bottom", "left", "right"]} className="items-center justify-center">
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.muted }]}>Menyiapkan penggantian password…</Text>
       </ScreenContainer>
     );
   }
