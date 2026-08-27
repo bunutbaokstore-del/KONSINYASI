@@ -7,12 +7,10 @@ import { APP_ROLES, MANAGED_ROLES, ROLE_LABELS, type AppRole } from "@/shared/au
 import { trpc } from "@/lib/trpc";
 import { isValidPhone, isValidProfileAddress, isValidProfileName, normalizePhone, type KtpUpload } from "@/shared/user-profile";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  FlatList,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -37,6 +35,7 @@ export default function ManageUsersScreen() {
   const colors = useColors();
   const router = useRouter();
   const { user, loading, isAuthenticated } = useAuth();
+  const { editUserId } = useLocalSearchParams<{ editUserId?: string }>();
   const currentRole = user?.role ?? "mitra_umkm";
   const currentUserId = user?.id ?? "";
   const canManage = currentRole === "distributor" || currentRole === "admin";
@@ -78,15 +77,16 @@ export default function ManageUsersScreen() {
       await usersQuery.refetch();
     },
   });
-  const deleteUser = trpc.management.remove.useMutation({
-    onSuccess: async () => {
-      await usersQuery.refetch();
-    },
-  });
+  const mutationError = createUser.error?.message ?? updateUser.error?.message;
+  const busy = createUser.isPending || updateUser.isPending;
+  const users = useMemo(() => (usersQuery.data ?? []) as ManagedUser[], [usersQuery.data]);
 
-  const mutationError = createUser.error?.message ?? updateUser.error?.message ?? deleteUser.error?.message;
-  const busy = createUser.isPending || updateUser.isPending || deleteUser.isPending;
-  const users = (usersQuery.data ?? []) as ManagedUser[];
+  useEffect(() => {
+    if (!editUserId || editingUser || users.length === 0) return;
+    const target = users.find((item) => item.id === editUserId);
+    if (!target) return;
+    openEdit(target);
+  }, [editUserId, editingUser, users]);
 
   const roleOptions = useMemo(() => availableRoles, [availableRoles]);
 
@@ -231,17 +231,6 @@ export default function ManageUsersScreen() {
     });
   }
 
-  function confirmDelete(item: ManagedUser) {
-    Alert.alert(
-      "Hapus pengguna?",
-      `Akun ${item.email} akan dihapus permanen dari Supabase Auth.`,
-      [
-        { text: "Batal", style: "cancel" },
-        { text: "Hapus", style: "destructive", onPress: () => void deleteUser.mutateAsync({ userId: item.id }) },
-      ],
-    );
-  }
-
   if (loading || !isAuthenticated || !canManage) {
     return (
       <ScreenContainer edges={["top", "bottom", "left", "right"]} className="items-center justify-center">
@@ -357,46 +346,19 @@ export default function ManageUsersScreen() {
           </Pressable>
         )}
 
-        <View style={styles.listHeader}>
-          <View>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Pengguna dalam ruang kerja</Text>
-            <Text style={[styles.sectionSubtitle, { color: colors.muted }]}>{users.length} akun terdaftar</Text>
-          </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Muat ulang pengguna" onPress={() => void usersQuery.refetch()} style={({ pressed }) => [styles.refreshButton, { borderColor: colors.border }, pressed && styles.pressed]}>
-            <AppIcon name="refresh" size={19} color={colors.primary} />
+                <View style={styles.actionCards}>
+          <Pressable accessibilityRole="button" onPress={openCreate} style={({ pressed }) => [styles.actionCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
+            <View style={[styles.actionIcon, { backgroundColor: `${colors.primary}16` }]}><AppIcon name="add" size={23} color={colors.primary} /></View>
+            <View style={styles.actionCopy}><Text style={[styles.actionTitle, { color: colors.foreground }]}>Tambah pengguna</Text><Text style={[styles.actionSubtitle, { color: colors.muted }]}>Buat akun baru dan lengkapi data wajib</Text></View>
+            <AppIcon name="chevron-right" size={20} color={colors.muted} />
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => router.push("./user-list")} style={({ pressed }) => [styles.actionCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
+            <View style={[styles.actionIcon, { backgroundColor: `${colors.primary}16` }]}><AppIcon name="group" size={23} color={colors.primary} /></View>
+            <View style={styles.actionCopy}><Text style={[styles.actionTitle, { color: colors.foreground }]}>Daftar pengguna</Text><Text style={[styles.actionSubtitle, { color: colors.muted }]}>Lihat dan kelola pengguna dalam ruang kerja</Text></View>
+            <AppIcon name="chevron-right" size={20} color={colors.muted} />
           </Pressable>
         </View>
 
-        {usersQuery.isLoading ? (
-          <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>
-        ) : usersQuery.error ? (
-          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.error, { color: colors.error }]}>{usersQuery.error.message}</Text></View>
-        ) : (
-          <FlatList
-            data={users}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <View style={[styles.userCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={[styles.avatar, { backgroundColor: `${colors.primary}18` }]}><Text style={[styles.avatarText, { color: colors.primary }]}>{item.name.charAt(0).toUpperCase()}</Text></View>
-                <View style={styles.userCopy}>
-                  <Text style={[styles.userName, { color: colors.foreground }]}>{item.name}</Text>
-                  <Text style={[styles.userEmail, { color: colors.muted }]}>{item.email}</Text>
-                  <View style={styles.metaRow}>
-                    <Text style={[styles.badge, { color: colors.primary, backgroundColor: `${colors.primary}16` }]}>{item.roleLabel}</Text>
-                    <Text style={[styles.status, { color: item.status === "active" ? colors.success : colors.error }]}>{item.status === "active" ? "Aktif" : "Nonaktif"}</Text>
-                  </View>
-                </View>
-                <View style={styles.actions}>
-                  {item.role !== "distributor" ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${item.name}`} onPress={() => openEdit(item)} style={({ pressed }) => [styles.actionButton, { borderColor: colors.border }, pressed && styles.pressed]}><AppIcon name="edit" size={17} color={colors.primary} /></Pressable> : null}
-                  {item.id !== currentUserId && item.role !== "distributor" ? <Pressable accessibilityRole="button" accessibilityLabel={`Hapus ${item.name}`} onPress={() => confirmDelete(item)} style={({ pressed }) => [styles.actionButton, { borderColor: `${colors.error}45` }, pressed && styles.pressed]}><AppIcon name="delete" size={17} color={colors.error} /></Pressable> : null}
-                </View>
-              </View>
-            )}
-            ListEmptyComponent={<View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><AppIcon name="group" size={28} color={colors.muted} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Belum ada pengguna lain</Text><Text style={[styles.emptyText, { color: colors.muted }]}>Tambahkan akun Admin atau role operasional untuk mulai membangun tim.</Text></View>}
-          />
-        )}
       </KeyboardAvoidingView>
     </ScreenContainer>
   );
@@ -413,6 +375,12 @@ const styles = StyleSheet.create({
   permissionText: { flex: 1, fontSize: 12, lineHeight: 18 },
   addButton: { minHeight: 52, borderRadius: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 14 },
   addButtonText: { fontSize: 15, fontWeight: "800" },
+  actionCards: { gap: 10, marginTop: 14 },
+  actionCard: { minHeight: 76, borderWidth: 1, borderRadius: 18, padding: 12, flexDirection: "row", alignItems: "center", gap: 11 },
+  actionIcon: { width: 46, height: 46, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  actionCopy: { flex: 1 },
+  actionTitle: { fontSize: 14, fontWeight: "800" },
+  actionSubtitle: { fontSize: 11, lineHeight: 16, marginTop: 3 },
   formCard: { borderWidth: 1, borderRadius: 20, padding: 16, marginTop: 14 },
   formScroll: { maxHeight: 590 },
   formScrollContent: { paddingBottom: 2 },

@@ -221,3 +221,12 @@
 - [x] Memastikan form pendaftaran Distributor juga mengumpulkan profil lengkap dan KTP wajib
 - [x] Memvalidasi TypeScript, lint, dan test
 - [ ] Menguji alur pendaftaran Distributor dan Tambah Pengguna di Android secara manual
+
+## Pemisahan Tambah Pengguna dan Daftar Pengguna
+
+- [x] Mendokumentasikan alur tampilan terpisah
+- [x] Membuat tampilan Daftar Pengguna khusus
+- [x] Memindahkan fungsi list, refresh, edit, dan hapus ke tampilan khusus
+- [x] Menyederhanakan Manajemen Pengguna agar form tidak menampilkan daftar di bawahnya
+- [x] Menjaga guard role dan validasi server yang sudah ada
+- [x] Memvalidasi TypeScript, lint, dan test; navigasi Android manual menunggu
