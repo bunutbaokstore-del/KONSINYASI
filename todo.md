@@ -87,3 +87,84 @@
 - [x] Menampilkan pesan rate limit yang informatif dan aman di aplikasi
 - [ ] Menyiapkan rekomendasi SMTP kustom untuk pengujian dan produksi
 - [ ] Menguji ulang reset password setelah masa rate limit atau SMTP tersedia
+
+## Konfigurasi SMTP Kustom
+
+- [ ] Memilih penyedia SMTP untuk KONSINYASI
+- [ ] Membuat credential SMTP atau API key
+- [ ] Memasukkan credential SMTP ke Supabase
+- [ ] Menguji email konfirmasi dan reset password
+- [ ] Menyimpan checkpoint konfigurasi SMTP
+
+## Perencanaan Modul Inti KONSINYASI
+
+- [ ] Memetakan peran pengguna dan alur bisnis konsinyasi
+- [ ] Menentukan modul MVP prioritas
+- [ ] Menentukan struktur data utama dan status transaksi
+- [ ] Menetapkan keputusan modul untuk implementasi berikutnya
+
+## Rekomendasi Navigasi Bawah
+
+- [ ] Menentukan lima tab utama untuk alur KONSINYASI
+- [ ] Memilih susunan tab final bersama pengguna
+- [ ] Mengimplementasikan ikon dan navigasi bawah setelah keputusan disetujui
+
+## Role dan Dashboard Terpisah
+
+- [ ] Mendokumentasikan konteks, tujuan, batasan, dan output RBAC
+- [x] Mendefinisikan role distributor, mitra UMKM, admin, supervisor, sales motoris, dan HRD
+- [x] Menentukan dashboard khusus dan menu yang terlihat per role
+- [x] Menentukan aturan bahwa role tidak dapat melihat data role lain
+- [ ] Menentukan model data role dan kebijakan RLS Supabase
+- [x] Menetapkan keputusan implementasi RBAC bersama pengguna
+
+## Aturan Onboarding Hirarki Distributor
+
+- [ ] Menetapkan pendaftaran email resmi sebagai pembuatan akun Distributor
+- [ ] Menonaktifkan pendaftaran mandiri untuk role bawahan
+- [x] Menentukan alur Admin membuat akun Mitra UMKM, Supervisor, Sales Motoris, dan HRD
+- [x] Menentukan hubungan akun bawahan dengan Distributor pemilik
+- [x] Menentukan status akun undangan, aktif, nonaktif, dan reset akses
+- [x] Menetapkan guard berdasarkan distributor_id serta role; RLS Supabase menunggu tabel bisnis
+
+## Manajemen Pengguna dan Hak Akses Role
+
+- [x] Menambahkan menu Manajemen Pengguna pada dashboard Distributor
+- [x] Menambahkan aksi Tambah Pengguna untuk seluruh role
+- [x] Mengizinkan Distributor mengedit seluruh pengguna
+- [x] Mengizinkan Distributor menghapus seluruh pengguna dengan perlindungan akun aktif terakhir
+- [x] Mengizinkan Admin membuat role bawahan
+- [x] Mengizinkan Admin mengedit role bawahan
+- [x] Mencegah Admin membuat atau menghapus Distributor
+- [x] Mencegah pengguna biasa mengakses Manajemen Pengguna
+- [x] Menerapkan validasi hak akses di UI dan server; RLS Supabase menunggu tabel bisnis
+
+## Akun Bawahan Ditentukan Admin
+
+- [x] Menghapus ketergantungan alur undangan email untuk akun bawahan
+- [x] Menambahkan form Admin untuk menentukan email login pengguna
+- [x] Menentukan metode password awal atau password sementara
+- [x] Memastikan pengguna bawahan tidak dapat mendaftar sendiri
+- [x] Menjaga batasan Admin agar tidak dapat membuat atau menghapus Distributor
+
+## Onboarding Berjenjang Distributor dan Admin
+
+- [x] Distributor membuat akun Admin melalui Manajemen Pengguna
+- [x] Distributor menentukan email login dan password awal Admin
+- [x] Admin login memakai credential yang diberikan Distributor
+- [x] Admin membuat akun Mitra UMKM, Supervisor, Sales Motoris, dan HRD
+- [x] Membatasi Admin agar tidak membuat atau menghapus Distributor
+- [x] Mewajibkan penggantian password awal pada login pertama
+
+## Implementasi Onboarding Berjenjang
+
+- [x] Meninjau skema dan hook autentikasi yang sudah ada
+- [x] Menambahkan model role, status akun, dan distributor_id pada metadata Supabase
+- [x] Membuat Manajemen Pengguna Distributor
+- [x] Membuat Manajemen Pengguna Admin dengan role terbatas
+- [x] Menambahkan pembuatan akun email/password melalui backend aman
+- [x] Menambahkan aturan password awal dan wajib ganti password
+- [ ] Menambahkan dashboard routing berdasarkan role
+- [ ] Menambahkan guard UI, API, dan RLS untuk pembatasan akses
+- [x] Menjalankan TypeScript, lint, dan test
+- [ ] Menyimpan checkpoint onboarding berjenjang

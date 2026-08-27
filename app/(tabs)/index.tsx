@@ -3,8 +3,9 @@ import { AppIcon } from "@/components/ui/app-icon";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { useSupabaseAuth } from "@/lib/supabase-auth-provider";
+import { ROLE_LABELS } from "@/shared/auth";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -23,6 +24,12 @@ export default function HomeScreen() {
   const [password, setPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isAuthenticated && user?.mustChangePassword) {
+      router.replace("/change-password");
+    }
+  }, [isAuthenticated, router, user?.mustChangePassword]);
 
   const handleLogin = async () => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -129,7 +136,18 @@ export default function HomeScreen() {
     );
   }
 
+  if (user?.mustChangePassword) {
+    return (
+      <ScreenContainer edges={["top", "bottom", "left", "right"]} className="items-center justify-center">
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.muted }]}>Menyiapkan penggantian password…</Text>
+      </ScreenContainer>
+    );
+  }
+
   const displayName = user?.name?.trim() || "Pengguna KONSINYASI";
+  const role = user?.role ?? "distributor";
+  const canManageUsers = role === "distributor" || role === "admin";
   return (
     <ScreenContainer className="px-6">
       <View style={styles.homeContent}>
@@ -158,7 +176,20 @@ export default function HomeScreen() {
           <Text style={[styles.sectionLabel, { color: colors.muted }]}>AKUN AKTIF</Text>
           <Text style={[styles.accountName, { color: colors.foreground }]}>{displayName}</Text>
           {user?.email ? <Text style={[styles.accountEmail, { color: colors.muted }]}>{user.email}</Text> : null}
+          <View style={[styles.roleBadge, { backgroundColor: `${colors.primary}16` }]}>
+            <Text style={[styles.roleBadgeText, { color: colors.primary }]}>{ROLE_LABELS[role]}</Text>
+          </View>
         </View>
+        {canManageUsers ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Buka Manajemen Pengguna" onPress={() => router.push("/manage-users")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }, pressed && styles.pressed]}>
+            <AppIcon name="group" size={20} color={colors.primary} />
+            <View style={styles.managementCopy}>
+              <Text style={[styles.managementTitle, { color: colors.foreground }]}>Manajemen Pengguna</Text>
+              <Text style={[styles.managementText, { color: colors.muted }]}>Buat dan kelola akun sesuai kewenangan</Text>
+            </View>
+            <AppIcon name="chevron-right" size={20} color={colors.primary} />
+          </Pressable>
+        ) : null}
       </View>
     </ScreenContainer>
   );
@@ -197,6 +228,12 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 1.3, marginBottom: 8 },
   accountName: { fontSize: 18, fontWeight: "700" },
   accountEmail: { fontSize: 14, marginTop: 5 },
+  roleBadge: { alignSelf: "flex-start", borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5, marginTop: 12 },
+  roleBadgeText: { fontSize: 11, fontWeight: "800" },
+  managementButton: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 18, padding: 15, marginTop: 14 },
+  managementCopy: { flex: 1, marginLeft: 11 },
+  managementTitle: { fontSize: 14, fontWeight: "800" },
+  managementText: { fontSize: 12, marginTop: 3 },
   pressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.65 },
 });

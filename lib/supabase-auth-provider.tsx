@@ -16,6 +16,7 @@ type SupabaseAuthContextValue = {
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: AuthError | null; hasSession: boolean }>;
   sendPasswordReset: (email: string) => Promise<{ error: AuthError | null }>;
   updatePassword: (password: string) => Promise<{ error: AuthError | null }>;
+  completePasswordSetup: () => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<{ error: AuthError | null }>;
 };
 
@@ -82,6 +83,10 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     },
     async updatePassword(password) {
       const { error } = await supabase.auth.updateUser({ password });
+      return { error };
+    },
+    async completePasswordSetup() {
+      const { error } = await supabase.auth.updateUser({ data: { must_change_password: false } });
       return { error };
     },
     async signOut() {

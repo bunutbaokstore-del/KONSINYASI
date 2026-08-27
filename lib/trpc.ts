@@ -3,33 +3,31 @@ import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import type { AppRouter } from "@/server/routers";
 import { getApiBaseUrl } from "@/constants/oauth";
-import * as Auth from "@/lib/_core/auth";
+import * as LegacyAuth from "@/lib/_core/auth";
+import { supabase } from "@/lib/supabase";
 
 /**
- * tRPC React client for type-safe API calls.
- *
- * IMPORTANT (tRPC v11): The `transformer` must be inside `httpBatchLink`,
- * NOT at the root createClient level. This ensures client and server
- * use the same serialization format (superjson).
+ * tRPC v11 client shared by the mobile app and web preview.
+ * Supabase access tokens are preferred; the legacy token remains as a
+ * compatibility fallback for older Manus OAuth sessions.
  */
 export const trpc = createTRPCReact<AppRouter>();
 
-/**
- * Creates the tRPC client with proper configuration.
- * Call this once in your app's root layout.
- */
 export function createTRPCClient() {
   return trpc.createClient({
     links: [
       httpBatchLink({
         url: `${getApiBaseUrl()}/api/trpc`,
-        // tRPC v11: transformer MUST be inside httpBatchLink, not at root
         transformer: superjson,
         async headers() {
-          const token = await Auth.getSessionToken();
-          return token ? { Authorization: `Bearer ${token}` } : {};
+          const { data } = await supabase.auth.getSession();
+          if (data.session?.access_token) {
+            return { Authorization: `Bearer ${data.session.access_token}` };
+          }
+
+          const legacyToken = await LegacyAuth.getSessionToken();
+          return legacyToken ? { Authorization: `Bearer ${legacyToken}` } : {};
         },
-        // Custom fetch to include credentials for cookie-based auth
         fetch(url, options) {
           return fetch(url, {
             ...options,

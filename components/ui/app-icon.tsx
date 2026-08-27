@@ -10,7 +10,14 @@ export type AppIconName =
   | "lock"
   | "help"
   | "chevron-right"
+  | "chevron-left"
   | "arrow-back"
+  | "edit"
+  | "delete"
+  | "group"
+  | "add"
+  | "close"
+  | "refresh"
   | "house"
   | "send"
   | "code";
@@ -44,6 +51,20 @@ export function AppIcon({ name, size = 24, color, strokeWidth = 2 }: AppIconProp
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Circle {...common} cx="12" cy="12" r="8.5" /><Path {...common} d="M9.7 9.2a2.5 2.5 0 1 1 4 2c-1.3.8-1.7 1.2-1.7 2.3M12 16.5h.01" /></Svg>;
     case "chevron-right":
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="m9 5 7 7-7 7" /></Svg>;
+    case "chevron-left":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="m15 5-7 7 7 7" /></Svg>;
+    case "edit":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="m4 16.5-.8 3.3 3.3-.8L18.8 6.7a2.3 2.3 0 0 0-3.3-3.3zM14.5 4.5l5 5" /></Svg>;
+    case "delete":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" /></Svg>;
+    case "group":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Circle {...common} cx="9" cy="8" r="3" /><Path {...common} d="M3.5 19c.6-3.1 2.4-4.7 5.5-4.7s4.9 1.6 5.5 4.7M16 6.5a2.7 2.7 0 0 1 0 5.2M16.2 14.5c2.5.5 3.8 2 4.3 4.5" /></Svg>;
+    case "add":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M12 5v14M5 12h14" /></Svg>;
+    case "close":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="m6 6 12 12M18 6 6 18" /></Svg>;
+    case "refresh":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M19 8.5A8 8 0 1 0 20 13" /><Path {...common} d="M19 4v4.5h-4.5" /></Svg>;
     case "arrow-back":
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M19 12H5M11 6l-6 6 6 6" /></Svg>;
     case "house":

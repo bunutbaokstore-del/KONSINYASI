@@ -25,6 +25,7 @@ export default function ProfileScreen() {
 
   const name = user?.name?.trim() || "Pengguna KONSINYASI";
   const initial = name.charAt(0).toUpperCase();
+  const canManageUsers = user?.role === "distributor" || user?.role === "admin";
 
   return (
     <ScreenContainer className="px-6">
@@ -45,6 +46,7 @@ export default function ProfileScreen() {
 
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Pengaturan akun</Text>
         <View style={[styles.menuCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {canManageUsers ? <ProfileRow icon="group" title="Manajemen Pengguna" subtitle="Buat dan kelola akun sesuai kewenangan" colors={colors} onPress={() => router.push("/manage-users")} /> : null}
           <ProfileRow icon="person" title="Data profil" subtitle="Nama dan alamat email akun" colors={colors} />
           <ProfileRow icon="lock" title="Keamanan akun" subtitle="Sesi Anda terlindungi" colors={colors} />
           <ProfileRow icon="help" title="Bantuan" subtitle="Dapatkan dukungan KONSINYASI" colors={colors} last />
@@ -64,9 +66,9 @@ export default function ProfileScreen() {
   );
 }
 
-function ProfileRow({ icon, title, subtitle, colors, last = false }: { icon: AppIconName; title: string; subtitle: string; colors: ReturnType<typeof useColors>; last?: boolean }) {
+function ProfileRow({ icon, title, subtitle, colors, last = false, onPress }: { icon: AppIconName; title: string; subtitle: string; colors: ReturnType<typeof useColors>; last?: boolean; onPress?: () => void }) {
   return (
-    <View style={[styles.row, !last && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+    <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [styles.row, !last && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }, pressed && styles.pressed]}>
       <View style={[styles.rowIcon, { backgroundColor: `${colors.primary}18` }]}>
         <AppIcon name={icon} size={20} color={colors.primary} />
       </View>
@@ -75,7 +77,7 @@ function ProfileRow({ icon, title, subtitle, colors, last = false }: { icon: App
         <Text style={[styles.rowSubtitle, { color: colors.muted }]}>{subtitle}</Text>
       </View>
       <AppIcon name="chevron-right" size={21} color={colors.muted} />
-    </View>
+    </Pressable>
   );
 }
 
