@@ -34,3 +34,19 @@
 - [x] Menghapus ketergantungan pemuatan font yang tidak diperlukan atau menambahkan fallback aman
 - [x] Memvalidasi startup aplikasi Android setelah perbaikan
 - [ ] Menyimpan checkpoint perbaikan bug font
+
+## Integrasi Supabase Auth
+
+- [ ] Memeriksa project Supabase yang terhubung
+- [x] Menambahkan Supabase URL dan publishable key ke environment proyek
+- [ ] Mengaktifkan dan mengonfigurasi provider email/password
+- [ ] Mengatur redirect URL Android KONSINYASI
+- [ ] Mengganti autentikasi Manus OAuth dengan Supabase Auth
+- [ ] Menghubungkan pendaftaran, login, logout, dan pemulihan kata sandi
+- [ ] Menambahkan pengujian alur Supabase Auth
+- [ ] Menyimpan checkpoint integrasi Supabase
+
+## Pengaturan Credential Supabase
+
+- [x] Membuka ulang kartu input Supabase URL dan publishable key
+- [x] Memvalidasi credential yang dimasukkan pengguna
