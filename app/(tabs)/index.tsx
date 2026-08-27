@@ -1,5 +1,6 @@
 import { ScreenContainer } from "@/components/screen-container";
 import { AppIcon } from "@/components/ui/app-icon";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { useSupabaseAuth } from "@/lib/supabase-auth-provider";
@@ -93,16 +94,15 @@ export default function HomeScreen() {
               style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.surface }]}
             />
             <Text style={[styles.inputLabel, { color: colors.foreground }]}>Kata sandi</Text>
-            <TextInput
+            <PasswordInput
               value={password}
               onChangeText={setPassword}
               placeholder="Masukkan kata sandi"
               placeholderTextColor={colors.muted}
-              secureTextEntry
+              colors={colors}
               textContentType="password"
               returnKeyType="done"
               onSubmitEditing={handleLogin}
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.surface }]}
             />
           </View>
 

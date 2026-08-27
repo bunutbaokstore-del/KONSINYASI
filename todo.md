@@ -185,3 +185,10 @@
 - [x] Membuat commit perubahan terbaru KONSINYASI
 - [x] Push commit ke branch GitHub yang terhubung
 - [x] Memverifikasi commit sudah tersedia di GitHub
+
+## Fitur Visibility Password
+
+- [x] Menambahkan tombol ikon mata pada seluruh kolom password
+- [x] Menjaga password tersembunyi secara default dan state tiap kolom tetap independen
+- [x] Menambahkan label aksesibilitas Bahasa Indonesia pada tombol visibility
+- [x] Memvalidasi TypeScript, lint, test, dan bundle setelah perubahan

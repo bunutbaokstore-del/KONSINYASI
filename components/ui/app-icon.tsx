@@ -20,7 +20,9 @@ export type AppIconName =
   | "refresh"
   | "house"
   | "send"
-  | "code";
+  | "code"
+  | "eye"
+  | "eye-off";
 
 type AppIconProps = {
   name: AppIconName;
@@ -73,5 +75,9 @@ export function AppIcon({ name, size = 24, color, strokeWidth = 2 }: AppIconProp
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="m4 4 16 8-16 8 3-8zM7 12h13" /></Svg>;
     case "code":
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16" /></Svg>;
+    case "eye":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M3.5 12s3.1-5 8.5-5 8.5 5 8.5 5-3.1 5-8.5 5-8.5-5-8.5-5z" /><Circle {...common} cx="12" cy="12" r="2.1" /></Svg>;
+    case "eye-off":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="m4 4 16 16M10.6 6.9A9.3 9.3 0 0 1 12 7c5.4 0 8.5 5 8.5 5a16 16 0 0 1-3 3.2M6.3 6.8C4.4 8.1 3.5 10 3.5 10s3.1 5 8.5 5c.5 0 1-.1 1.5-.1M9.9 9.9a3 3 0 0 0 4.2 4.2" /></Svg>;
   }
 }

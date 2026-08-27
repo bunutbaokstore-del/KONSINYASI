@@ -1,10 +1,11 @@
 import { ScreenContainer } from "@/components/screen-container";
 import { AppIcon } from "@/components/ui/app-icon";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useColors } from "@/hooks/use-colors";
 import { useSupabaseAuth } from "@/lib/supabase-auth-provider";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 export default function ResetPasswordScreen() {
   const colors = useColors();
@@ -62,9 +63,9 @@ export default function ResetPasswordScreen() {
             <Text style={[styles.title, { color: colors.foreground }]}>Buat kata sandi baru</Text>
             <Text style={[styles.subtitle, { color: colors.muted }]}>Gunakan minimal 8 karakter dan jangan gunakan kata sandi yang sama di layanan lain.</Text>
             <Text style={[styles.label, { color: colors.foreground }]}>Kata sandi baru</Text>
-            <TextInput value={password} onChangeText={setPassword} placeholder="Minimal 8 karakter" placeholderTextColor={colors.muted} secureTextEntry textContentType="newPassword" style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.surface }]} />
+            <PasswordInput value={password} onChangeText={setPassword} placeholder="Minimal 8 karakter" placeholderTextColor={colors.muted} colors={colors} textContentType="newPassword" />
             <Text style={[styles.label, { color: colors.foreground }]}>Ulangi kata sandi</Text>
-            <TextInput value={confirmation} onChangeText={setConfirmation} placeholder="Ketik ulang kata sandi" placeholderTextColor={colors.muted} secureTextEntry textContentType="newPassword" returnKeyType="done" onSubmitEditing={handleSubmit} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.surface }]} />
+            <PasswordInput value={confirmation} onChangeText={setConfirmation} placeholder="Ketik ulang kata sandi" placeholderTextColor={colors.muted} colors={colors} textContentType="newPassword" returnKeyType="done" onSubmitEditing={handleSubmit} />
             {error ? <Text style={[styles.error, { color: colors.error }]}>{error}</Text> : null}
             <Pressable disabled={loading} onPress={handleSubmit} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed, loading && styles.disabled]}>
               {loading ? <ActivityIndicator color={colors.background} /> : <Text style={[styles.primaryText, { color: colors.background }]}>Simpan kata sandi</Text>}

@@ -1,10 +1,11 @@
 import { ScreenContainer } from "@/components/screen-container";
 import { AppIcon } from "@/components/ui/app-icon";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useColors } from "@/hooks/use-colors";
 import { useSupabaseAuth } from "@/lib/supabase-auth-provider";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 export default function ChangePasswordScreen() {
   const colors = useColors();
@@ -56,9 +57,9 @@ export default function ChangePasswordScreen() {
         <Text style={[styles.subtitle, { color: colors.muted }]}>Password awal dari pengelola hanya berlaku untuk masuk pertama. Buat password pribadi sebelum melanjutkan.</Text>
 
         <Text style={[styles.label, { color: colors.foreground }]}>Password baru</Text>
-        <TextInput value={password} onChangeText={setPassword} secureTextEntry placeholder="Minimal 8 karakter" placeholderTextColor={colors.muted} style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.foreground }]} />
+        <PasswordInput value={password} onChangeText={setPassword} placeholder="Minimal 8 karakter" placeholderTextColor={colors.muted} colors={colors} />
         <Text style={[styles.label, { color: colors.foreground }]}>Konfirmasi password</Text>
-        <TextInput value={confirmation} onChangeText={setConfirmation} secureTextEntry placeholder="Ulangi password baru" placeholderTextColor={colors.muted} returnKeyType="done" onSubmitEditing={() => void handleSubmit()} style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.foreground }]} />
+        <PasswordInput value={confirmation} onChangeText={setConfirmation} placeholder="Ulangi password baru" placeholderTextColor={colors.muted} colors={colors} returnKeyType="done" onSubmitEditing={() => void handleSubmit()} />
         {error ? <Text style={[styles.error, { color: colors.error }]}>{error}</Text> : null}
         <Pressable accessibilityRole="button" disabled={loading} onPress={() => void handleSubmit()} style={({ pressed }) => [styles.button, { backgroundColor: colors.primary }, pressed && styles.pressed, loading && styles.disabled]}>
           {loading ? <ActivityIndicator color={colors.background} /> : <Text style={[styles.buttonText, { color: colors.background }]}>Simpan dan lanjutkan</Text>}

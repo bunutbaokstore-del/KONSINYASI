@@ -1,5 +1,6 @@
 import { ScreenContainer } from "@/components/screen-container";
 import { AppIcon } from "@/components/ui/app-icon";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useColors } from "@/hooks/use-colors";
 import { useSupabaseAuth } from "@/lib/supabase-auth-provider";
 import { useRouter } from "expo-router";
@@ -68,7 +69,10 @@ export default function RegisterScreen() {
 
             <Field label="Nama lengkap" value={name} onChangeText={setName} placeholder="Nama Anda" colors={colors} autoCapitalize="words" />
             <Field label="Email" value={email} onChangeText={setEmail} placeholder="nama@email.com" colors={colors} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
-            <Field label="Kata sandi" value={password} onChangeText={setPassword} placeholder="Minimal 8 karakter" colors={colors} secureTextEntry returnKeyType="done" onSubmitEditing={handleRegister} />
+            <View style={styles.fieldWrap}>
+              <Text style={[styles.label, { color: colors.foreground }]}>Kata sandi</Text>
+              <PasswordInput value={password} onChangeText={setPassword} placeholder="Minimal 8 karakter" placeholderTextColor={colors.muted} colors={colors} returnKeyType="done" onSubmitEditing={handleRegister} />
+            </View>
             {error ? <Text style={[styles.error, { color: colors.error }]}>{error}</Text> : null}
             <Pressable disabled={loading} onPress={handleRegister} style={({ pressed }) => [styles.primaryButton, { backgroundColor: colors.primary }, pressed && styles.pressed, loading && styles.disabled]}>
               {loading ? <ActivityIndicator color={colors.background} /> : <Text style={[styles.primaryText, { color: colors.background }]}>Daftar dan lanjutkan</Text>}

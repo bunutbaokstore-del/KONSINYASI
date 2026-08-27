@@ -1,5 +1,6 @@
 import { ScreenContainer } from "@/components/screen-container";
 import { AppIcon } from "@/components/ui/app-icon";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { APP_ROLES, MANAGED_ROLES, ROLE_LABELS, type AppRole } from "@/shared/auth";
@@ -195,7 +196,7 @@ export default function ManageUsersScreen() {
             {!editingUser ? (
               <>
                 <Text style={[styles.label, { color: colors.foreground }]}>Password awal</Text>
-                <TextInput value={password} onChangeText={setPassword} secureTextEntry placeholder="Minimal 8 karakter" placeholderTextColor={colors.muted} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]} />
+                <PasswordInput value={password} onChangeText={setPassword} placeholder="Minimal 8 karakter" placeholderTextColor={colors.muted} colors={{ ...colors, surface: colors.background }} />
                 <Text style={[styles.helper, { color: colors.muted }]}>Sampaikan password awal melalui jalur pribadi. Password tidak dapat dilihat kembali setelah akun dibuat.</Text>
               </>
             ) : null}
