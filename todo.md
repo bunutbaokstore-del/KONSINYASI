@@ -168,3 +168,20 @@
 - [ ] Menambahkan guard UI, API, dan RLS untuk pembatasan akses
 - [x] Menjalankan TypeScript, lint, dan test
 - [ ] Menyimpan checkpoint onboarding berjenjang
+
+## Pemulihan Dev Server
+
+- [ ] Merestart dev server KONSINYASI
+- [ ] Memeriksa status preview dan log startup setelah restart
+
+## Stabilitas Dev Server Berulang
+
+- [x] Merestart dev server setelah gangguan berulang
+- [x] Memeriksa log dan kestabilan preview setelah restart
+
+## Sinkronisasi GitHub
+
+- [ ] Memeriksa status dan remote repository GitHub
+- [ ] Membuat commit perubahan terbaru KONSINYASI
+- [ ] Push commit ke branch GitHub yang terhubung
+- [ ] Memverifikasi commit sudah tersedia di GitHub
