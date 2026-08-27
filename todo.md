@@ -181,7 +181,7 @@
 
 ## Sinkronisasi GitHub
 
-- [ ] Memeriksa status dan remote repository GitHub
-- [ ] Membuat commit perubahan terbaru KONSINYASI
-- [ ] Push commit ke branch GitHub yang terhubung
-- [ ] Memverifikasi commit sudah tersedia di GitHub
+- [x] Memeriksa status dan remote repository GitHub
+- [x] Membuat commit perubahan terbaru KONSINYASI
+- [x] Push commit ke branch GitHub yang terhubung
+- [x] Memverifikasi commit sudah tersedia di GitHub
