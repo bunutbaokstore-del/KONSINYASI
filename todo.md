@@ -222,6 +222,14 @@
 - [x] Memvalidasi TypeScript, lint, dan test
 - [ ] Menguji alur pendaftaran Distributor dan Tambah Pengguna di Android secara manual
 
+## Pengembalian Daftar Pengguna Inline
+
+- [x] Mendokumentasikan permintaan pengembalian tampilan
+- [x] Mengembalikan daftar pengguna ke bawah form Manajemen Pengguna
+- [x] Memulihkan fungsi refresh, edit, ubah status, dan hapus pada halaman yang sama
+- [x] Menghapus navigasi utama ke tampilan Daftar Pengguna terpisah
+- [x] Memvalidasi TypeScript, lint, dan test; tampilan Android manual menunggu
+
 ## Pemisahan Tambah Pengguna dan Daftar Pengguna
 
 - [x] Mendokumentasikan alur tampilan terpisah
