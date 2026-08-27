@@ -1,7 +1,7 @@
 import { startOAuthLogin } from "@/constants/oauth";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
-import { MaterialIcons } from "@expo/vector-icons";
+import { AppIcon } from "@/components/ui/app-icon";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -34,7 +34,7 @@ export default function RegisterScreen() {
     <ScreenContainer edges={["top", "bottom", "left", "right"]} className="px-6">
       <View style={styles.content}>
         <Pressable accessibilityRole="button" accessibilityLabel="Kembali ke login" onPress={() => router.back()} style={styles.backButton}>
-          <MaterialIcons name="arrow-back" size={22} color={colors.foreground} />
+          <AppIcon name="arrow-back" size={22} color={colors.foreground} />
           <Text style={[styles.backText, { color: colors.foreground }]}>Kembali</Text>
         </Pressable>
         <Text style={[styles.eyebrow, { color: colors.primary }]}>AKUN BARU</Text>

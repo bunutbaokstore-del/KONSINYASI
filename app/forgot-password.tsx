@@ -1,6 +1,6 @@
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
-import { MaterialIcons } from "@expo/vector-icons";
+import { AppIcon } from "@/components/ui/app-icon";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -25,11 +25,11 @@ export default function ForgotPasswordScreen() {
     <ScreenContainer edges={["top", "bottom", "left", "right"]} className="px-6">
       <View style={styles.content}>
         <Pressable accessibilityRole="button" accessibilityLabel="Kembali ke login" onPress={() => router.back()} style={styles.backButton}>
-          <MaterialIcons name="arrow-back" size={22} color={colors.foreground} />
+          <AppIcon name="arrow-back" size={22} color={colors.foreground} />
           <Text style={[styles.backText, { color: colors.foreground }]}>Kembali</Text>
         </Pressable>
         <View style={[styles.icon, { backgroundColor: `${colors.primary}18` }]}>
-          <MaterialIcons name="lock-reset" size={30} color={colors.primary} />
+          <AppIcon name="lock" size={30} color={colors.primary} />
         </View>
         <Text style={[styles.eyebrow, { color: colors.primary }]}>AKSES AKUN</Text>
         <Text style={[styles.title, { color: colors.foreground }]}>Pulihkan kata sandi</Text>
@@ -46,7 +46,7 @@ export default function ForgotPasswordScreen() {
           </>
         ) : (
           <View style={[styles.successCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <MaterialIcons name="mark-email-read" size={30} color={colors.success} />
+            <AppIcon name="verified" size={30} color={colors.success} />
             <Text style={[styles.successTitle, { color: colors.foreground }]}>Permintaan siap diproses</Text>
             <Text style={[styles.successText, { color: colors.muted }]}>Jika email terdaftar, instruksi pemulihan akan dikirim ke {email.trim()}.</Text>
             <Pressable onPress={() => setSubmitted(false)} style={styles.tryAgain}><Text style={[styles.tryAgainText, { color: colors.primary }]}>Gunakan email lain</Text></Pressable>

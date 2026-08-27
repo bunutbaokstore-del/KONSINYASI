@@ -2,7 +2,7 @@ import { startOAuthLogin } from "@/constants/oauth";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
-import { MaterialIcons } from "@expo/vector-icons";
+import { AppIcon } from "@/components/ui/app-icon";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -45,14 +45,14 @@ export default function HomeScreen() {
       <ScreenContainer edges={["top", "bottom", "left", "right"]} className="px-6">
         <View style={styles.loginContent}>
           <View style={[styles.logo, { backgroundColor: colors.primary }]}>
-            <MaterialIcons name="inventory-2" size={42} color={colors.background} />
+            <AppIcon name="inventory" size={42} color={colors.background} />
           </View>
           <Text style={[styles.eyebrow, { color: colors.primary }]}>RUANG TITIPAN TERPERCAYA</Text>
           <Text style={[styles.title, { color: colors.foreground }]}>Selamat datang di KONSINYASI</Text>
           <Text style={[styles.subtitle, { color: colors.muted }]}>Masuk untuk mengelola perjalanan konsinyasi Anda dengan lebih rapi.</Text>
 
           <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <MaterialIcons name="verified-user" size={22} color={colors.primary} />
+            <AppIcon name="verified-user" size={22} color={colors.primary} />
             <View style={styles.infoCopy}>
               <Text style={[styles.infoTitle, { color: colors.foreground }]}>Akses aman dan praktis</Text>
               <Text style={[styles.infoText, { color: colors.muted }]}>Gunakan akun Anda untuk melanjutkan ke ruang kerja KONSINYASI.</Text>
@@ -104,12 +104,12 @@ export default function HomeScreen() {
             onPress={logout}
             style={({ pressed }) => [styles.iconButton, { borderColor: colors.border }, pressed && styles.pressed]}
           >
-            <MaterialIcons name="logout" size={21} color={colors.primary} />
+            <AppIcon name="logout" size={21} color={colors.primary} />
           </Pressable>
         </View>
 
         <View style={[styles.welcomeCard, { backgroundColor: colors.primary }]}>
-          <View style={styles.cardIcon}><MaterialIcons name="handshake" size={28} color={colors.primary} /></View>
+          <View style={styles.cardIcon}><AppIcon name="handshake" size={28} color={colors.primary} /></View>
           <Text style={[styles.cardTitle, { color: colors.background }]}>Akun Anda siap digunakan</Text>
           <Text style={[styles.cardText, { color: "#D9EFE5" }]}>Selamat datang di ruang kerja KONSINYASI. Fitur konsinyasi Anda akan hadir di sini.</Text>
         </View>

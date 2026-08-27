@@ -27,3 +27,10 @@
 - [ ] Menambahkan pengujian unit untuk validasi pendaftaran dan pemulihan
 - [x] Menjalankan pemeriksaan TypeScript, lint, dan test fitur akun
 - [ ] Menyimpan checkpoint fitur akun lanjutan
+
+## Perbaikan Bug Font Android
+
+- [x] Menelusuri sumber FontFaceObserver timeout 6000ms
+- [x] Menghapus ketergantungan pemuatan font yang tidak diperlukan atau menambahkan fallback aman
+- [x] Memvalidasi startup aplikasi Android setelah perbaikan
+- [ ] Menyimpan checkpoint perbaikan bug font

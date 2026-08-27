@@ -1,7 +1,7 @@
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
-import { MaterialIcons } from "@expo/vector-icons";
+import { AppIcon, type AppIconName } from "@/components/ui/app-icon";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
@@ -40,14 +40,14 @@ export default function ProfileScreen() {
             <Text style={[styles.name, { color: colors.background }]}>{name}</Text>
             <Text style={[styles.email, { color: "#D9EFE5" }]}>{user?.email || "Email belum tersedia"}</Text>
           </View>
-          <MaterialIcons name="verified" size={22} color={colors.background} />
+          <AppIcon name="verified" size={22} color={colors.background} />
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Pengaturan akun</Text>
         <View style={[styles.menuCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <ProfileRow icon="person-outline" title="Data profil" subtitle="Nama dan alamat email akun" colors={colors} />
-          <ProfileRow icon="lock-outline" title="Keamanan akun" subtitle="Sesi Anda terlindungi" colors={colors} />
-          <ProfileRow icon="help-outline" title="Bantuan" subtitle="Dapatkan dukungan KONSINYASI" colors={colors} last />
+          <ProfileRow icon="person" title="Data profil" subtitle="Nama dan alamat email akun" colors={colors} />
+          <ProfileRow icon="lock" title="Keamanan akun" subtitle="Sesi Anda terlindungi" colors={colors} />
+          <ProfileRow icon="help" title="Bantuan" subtitle="Dapatkan dukungan KONSINYASI" colors={colors} last />
         </View>
 
         <Pressable
@@ -56,7 +56,7 @@ export default function ProfileScreen() {
           onPress={logout}
           style={({ pressed }) => [styles.logoutButton, { borderColor: colors.border }, pressed && styles.pressed]}
         >
-          <MaterialIcons name="logout" size={20} color={colors.error} />
+          <AppIcon name="logout" size={20} color={colors.error} />
           <Text style={[styles.logoutText, { color: colors.error }]}>Keluar dari akun</Text>
         </Pressable>
       </View>
@@ -64,17 +64,17 @@ export default function ProfileScreen() {
   );
 }
 
-function ProfileRow({ icon, title, subtitle, colors, last = false }: { icon: keyof typeof MaterialIcons.glyphMap; title: string; subtitle: string; colors: ReturnType<typeof useColors>; last?: boolean }) {
+function ProfileRow({ icon, title, subtitle, colors, last = false }: { icon: AppIconName; title: string; subtitle: string; colors: ReturnType<typeof useColors>; last?: boolean }) {
   return (
     <View style={[styles.row, !last && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
       <View style={[styles.rowIcon, { backgroundColor: `${colors.primary}18` }]}>
-        <MaterialIcons name={icon} size={20} color={colors.primary} />
+        <AppIcon name={icon} size={20} color={colors.primary} />
       </View>
       <View style={styles.rowCopy}>
         <Text style={[styles.rowTitle, { color: colors.foreground }]}>{title}</Text>
         <Text style={[styles.rowSubtitle, { color: colors.muted }]}>{subtitle}</Text>
       </View>
-      <MaterialIcons name="chevron-right" size={21} color={colors.muted} />
+      <AppIcon name="chevron-right" size={21} color={colors.muted} />
     </View>
   );
 }
