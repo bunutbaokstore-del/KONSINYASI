@@ -192,3 +192,11 @@
 - [x] Menjaga password tersembunyi secara default dan state tiap kolom tetap independen
 - [x] Menambahkan label aksesibilitas Bahasa Indonesia pada tombol visibility
 - [x] Memvalidasi TypeScript, lint, test, dan bundle setelah perubahan
+
+## Pembatasan Distributor Tunggal
+
+- [x] Mendokumentasikan aturan satu Distributor per ruang kerja
+- [x] Menghapus pilihan role Distributor dari form Tambah Pengguna
+- [x] Menolak pembuatan akun Distributor pada validasi server
+- [x] Memastikan akun Distributor aktif tidak dapat dihapus atau diturunkan rolenya
+- [x] Memvalidasi TypeScript, lint, test, dan alur Manajemen Pengguna

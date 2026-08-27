@@ -26,6 +26,12 @@ function ensureTargetRoleAllowed(currentRole: AppRole, targetRole: AppRole) {
   }
 }
 
+function ensureDistributorCannotBeCreated(targetRole: AppRole) {
+  if (targetRole === "distributor") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Akun Distributor utama sudah tersedia dan tidak dapat dibuat dari Manajemen Pengguna." });
+  }
+}
+
 async function getTargetOrThrow(userId: string) {
   const { data, error } = await getSupabaseAdminClient().auth.admin.getUserById(userId);
   if (error || !data.user) {
@@ -103,10 +109,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const currentRole = callerRole(ctx);
         ensureTargetRoleAllowed(currentRole, input.role);
+        ensureDistributorCannotBeCreated(input.role);
         const distributorId = getDistributorId(ctx.supabaseUser);
-        const appMetadata = input.role === "distributor"
-          ? { role: input.role, status: "active" }
-          : { role: input.role, status: "active", distributor_id: distributorId };
+        const appMetadata = { role: input.role, status: "active", distributor_id: distributorId };
 
         const { data, error } = await getSupabaseAdminClient().auth.admin.createUser({
           email: input.email,
@@ -133,6 +138,13 @@ export const appRouter = router({
         ensureTargetRoleAllowed(currentRole, input.role);
         const target = await getTargetOrThrow(input.userId);
         ensureTargetInScope(ctx, target);
+        const targetRole = getUserRole(target);
+        if (targetRole === "distributor" && target.id !== ctx.supabaseUser?.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Akun Distributor utama tidak dapat diubah dari Manajemen Pengguna." });
+        }
+        if (input.role === "distributor" && target.id !== ctx.supabaseUser?.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Role Distributor hanya untuk akun Distributor utama." });
+        }
         if (target.id === ctx.supabaseUser?.id && input.role !== "distributor") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Role akun yang sedang digunakan tidak dapat diturunkan." });
         }
@@ -163,6 +175,9 @@ export const appRouter = router({
         }
         const target = await getTargetOrThrow(input.userId);
         ensureTargetInScope(ctx, target);
+        if (getUserRole(target) === "distributor") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Akun Distributor utama tidak dapat dihapus dari Manajemen Pengguna." });
+        }
         const { error } = await getSupabaseAdminClient().auth.admin.deleteUser(input.userId);
         if (error) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Akun belum dapat dihapus." });

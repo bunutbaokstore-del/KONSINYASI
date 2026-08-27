@@ -36,7 +36,7 @@ export default function ManageUsersScreen() {
   const currentRole = user?.role ?? "mitra_umkm";
   const currentUserId = user?.id ?? "";
   const canManage = currentRole === "distributor" || currentRole === "admin";
-  const availableRoles = currentRole === "distributor" ? APP_ROLES : MANAGED_ROLES;
+  const availableRoles = currentRole === "distributor" ? APP_ROLES.filter((item) => item !== "distributor") : MANAGED_ROLES;
   const [formVisible, setFormVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
   const [name, setName] = useState("");
@@ -77,7 +77,7 @@ export default function ManageUsersScreen() {
   const busy = createUser.isPending || updateUser.isPending || deleteUser.isPending;
   const users = (usersQuery.data ?? []) as ManagedUser[];
 
-  const roleOptions = useMemo(() => availableRoles.filter((item) => item !== "distributor" || currentRole === "distributor"), [availableRoles, currentRole]);
+  const roleOptions = useMemo(() => availableRoles, [availableRoles]);
 
   function closeForm() {
     setFormVisible(false);
@@ -264,8 +264,8 @@ export default function ManageUsersScreen() {
                   </View>
                 </View>
                 <View style={styles.actions}>
-                  <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${item.name}`} onPress={() => openEdit(item)} style={({ pressed }) => [styles.actionButton, { borderColor: colors.border }, pressed && styles.pressed]}><AppIcon name="edit" size={17} color={colors.primary} /></Pressable>
-                  {item.id !== currentUserId ? <Pressable accessibilityRole="button" accessibilityLabel={`Hapus ${item.name}`} onPress={() => confirmDelete(item)} style={({ pressed }) => [styles.actionButton, { borderColor: `${colors.error}45` }, pressed && styles.pressed]}><AppIcon name="delete" size={17} color={colors.error} /></Pressable> : null}
+                  {item.role !== "distributor" ? <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${item.name}`} onPress={() => openEdit(item)} style={({ pressed }) => [styles.actionButton, { borderColor: colors.border }, pressed && styles.pressed]}><AppIcon name="edit" size={17} color={colors.primary} /></Pressable> : null}
+                  {item.id !== currentUserId && item.role !== "distributor" ? <Pressable accessibilityRole="button" accessibilityLabel={`Hapus ${item.name}`} onPress={() => confirmDelete(item)} style={({ pressed }) => [styles.actionButton, { borderColor: `${colors.error}45` }, pressed && styles.pressed]}><AppIcon name="delete" size={17} color={colors.error} /></Pressable> : null}
                 </View>
               </View>
             )}
