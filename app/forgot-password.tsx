@@ -27,7 +27,14 @@ export default function ForgotPasswordScreen() {
     const result = await sendPasswordReset(normalizedEmail);
     setLoading(false);
     if (result.error) {
-      setError("Permintaan belum dapat diproses. Silakan coba lagi.");
+      const message = result.error.message.toLowerCase();
+      if (message.includes("rate limit") || message.includes("rate_limit")) {
+        setError("Batas pengiriman email tercapai. Tunggu beberapa saat sebelum mencoba lagi atau hubungi administrator untuk mengaktifkan SMTP.");
+      } else if (message.includes("redirect")) {
+        setError("Tautan pemulihan belum dikonfigurasi di Supabase. Hubungi administrator.");
+      } else {
+        setError("Permintaan belum dapat diproses. Silakan coba lagi nanti.");
+      }
       return;
     }
     setSubmitted(true);

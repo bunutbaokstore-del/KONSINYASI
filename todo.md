@@ -72,3 +72,18 @@
 - [ ] Menguji penolakan credential yang salah
 - [x] Menguji logout dan persistensi sesi
 - [x] Mencatat error atau hasil pengujian dari perangkat
+
+## Perbaikan Reset Password Supabase
+
+- [ ] Menelusuri alasan `resetPasswordForEmail` gagal
+- [ ] Memperjelas pesan error pemulihan kata sandi di aplikasi
+- [ ] Memastikan redirect reset password diizinkan Supabase
+- [ ] Memvalidasi pengiriman instruksi pemulihan
+- [ ] Menyimpan checkpoint perbaikan reset password
+
+## Penanganan Email Rate Limit
+
+- [x] Mencatat error `email rate limit exceeded` pada pemulihan kata sandi
+- [x] Menampilkan pesan rate limit yang informatif dan aman di aplikasi
+- [ ] Menyiapkan rekomendasi SMTP kustom untuk pengujian dan produksi
+- [ ] Menguji ulang reset password setelah masa rate limit atau SMTP tersedia
