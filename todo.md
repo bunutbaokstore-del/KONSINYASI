@@ -186,6 +186,13 @@
 - [x] Push commit ke branch GitHub yang terhubung
 - [x] Memverifikasi commit sudah tersedia di GitHub
 
+## Sinkronisasi GitHub Terbaru
+
+- [ ] Memeriksa status branch dan perubahan lokal
+- [ ] Membuat commit perubahan terbaru
+- [ ] Push commit ke branch main GitHub
+- [ ] Memverifikasi commit terbaru di GitHub
+
 ## Fitur Visibility Password
 
 - [x] Menambahkan tombol ikon mata pada seluruh kolom password
