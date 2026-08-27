@@ -15,3 +15,15 @@
 - [ ] Menambahkan pengujian unit untuk perilaku autentikasi dan navigasi dasar
 - [x] Menjalankan pemeriksaan TypeScript, lint, dan test
 - [ ] Menyimpan checkpoint versi siap ditinjau
+
+## Permintaan Fitur Akun Lanjutan
+
+- [x] Mendokumentasikan konteks, tujuan, batasan, dan output fitur akun
+- [x] Menambahkan navigasi tab Profil pengguna
+- [x] Membuat halaman profil pengguna lengkap dengan identitas dan aksi akun
+- [x] Membuat halaman pendaftaran akun dengan validasi form
+- [x] Membuat halaman pemulihan kata sandi dengan state permintaan terkirim
+- [ ] Menentukan dan menghubungkan mekanisme backend autentikasi email/password
+- [ ] Menambahkan pengujian unit untuk validasi pendaftaran dan pemulihan
+- [x] Menjalankan pemeriksaan TypeScript, lint, dan test fitur akun
+- [ ] Menyimpan checkpoint fitur akun lanjutan

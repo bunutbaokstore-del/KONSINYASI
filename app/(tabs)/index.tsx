@@ -3,6 +3,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -14,6 +15,7 @@ import {
 
 export default function HomeScreen() {
   const colors = useColors();
+  const router = useRouter();
   const { user, loading, isAuthenticated, logout } = useAuth();
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -72,6 +74,15 @@ export default function HomeScreen() {
           >
             {loginLoading ? <ActivityIndicator color={colors.background} /> : <Text style={[styles.primaryButtonText, { color: colors.background }]}>Masuk dengan akun</Text>}
           </Pressable>
+          <View style={styles.linkRow}>
+            <Pressable onPress={() => router.push("/register")} accessibilityRole="button">
+              <Text style={[styles.linkText, { color: colors.primary }]}>Buat akun baru</Text>
+            </Pressable>
+            <Text style={[styles.linkDivider, { color: colors.border }]}>|</Text>
+            <Pressable onPress={() => router.push("/forgot-password")} accessibilityRole="button">
+              <Text style={[styles.linkText, { color: colors.primary }]}>Lupa kata sandi?</Text>
+            </Pressable>
+          </View>
           <Text style={[styles.legalText, { color: colors.muted }]}>Dengan masuk, Anda melanjutkan ke layanan autentikasi KONSINYASI.</Text>
         </View>
       </ScreenContainer>
@@ -125,6 +136,9 @@ const styles = StyleSheet.create({
   infoText: { fontSize: 13, lineHeight: 19 },
   primaryButton: { width: "100%", minHeight: 54, borderRadius: 16, alignItems: "center", justifyContent: "center", marginTop: 18 },
   primaryButtonText: { fontSize: 16, fontWeight: "800" },
+  linkRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 16 },
+  linkText: { fontSize: 13, fontWeight: "800" },
+  linkDivider: { fontSize: 13 },
   legalText: { fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 14, maxWidth: 310 },
   errorText: { width: "100%", fontSize: 13, lineHeight: 19, textAlign: "center", marginTop: 16 },
   loadingText: { marginTop: 14, fontSize: 14 },
