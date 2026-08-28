@@ -276,6 +276,14 @@
 - [x] Menjalankan TypeScript, lint, test, dan build
 - [ ] Menguji audit dan notifikasi di Android secara manual
 
+## Penyembunyian Request Selesai di Admin
+
+- [x] Mendokumentasikan aturan riwayat hanya untuk request aktif
+- [x] Memfilter request disetujui/ditolak dari tampilan Admin
+- [x] Memastikan request tetap tersimpan sebagai data audit dan notifikasi
+- [x] Menyegarkan daftar setelah persetujuan berhasil
+- [x] Menjalankan TypeScript, lint, test, dan build
+
 ## Pengembalian Daftar Pengguna Inline
 
 - [x] Mendokumentasikan permintaan pengembalian tampilan

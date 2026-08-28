@@ -74,10 +74,11 @@ function MitraRequestView({ colors, requestsQuery, onBack }: ViewProps) {
 function ManagerReviewView({ colors, requestsQuery, onBack }: ViewProps) {
   const reviewMutation = trpc.supplier.review.useMutation();
   const [error, setError] = useState<string | null>(null);
+  const activeRequests = ((requestsQuery.data ?? []) as SupplierRequest[]).filter((request) => request.status === "pending");
   const review = (requestId: string, decision: "approved" | "rejected") => Alert.alert(decision === "approved" ? "Setujui pengajuan?" : "Tolak pengajuan?", "Keputusan ini akan dicatat pada riwayat pengajuan.", [{ text: "Batal", style: "cancel" }, { text: decision === "approved" ? "Setujui" : "Tolak", style: decision === "rejected" ? "destructive" : "default", onPress: async () => { try { await reviewMutation.mutateAsync({ requestId, decision }); await requestsQuery.refetch(); } catch (reviewError) { setError(reviewError instanceof Error ? reviewError.message : "Pengajuan belum dapat diproses."); } } }]);
   return <RequestShell colors={colors} title="Persetujuan supplier" subtitle="Periksa pengajuan Mitra UMKM sebelum menjadi data resmi." onBack={onBack}>
     {error ? <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text> : null}
-    <RequestList colors={colors} requests={(requestsQuery.data ?? []) as SupplierRequest[]} loading={requestsQuery.isLoading} onRefresh={() => void requestsQuery.refetch()} showActions onReview={review} reviewPending={reviewMutation.isPending} />
+    <RequestList colors={colors} requests={activeRequests} loading={requestsQuery.isLoading} onRefresh={() => void requestsQuery.refetch()} showActions onReview={review} reviewPending={reviewMutation.isPending} />
   </RequestShell>;
 }
 
