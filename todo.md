@@ -458,3 +458,10 @@
 - [ ] Validasi ulang checker dan pastikan tidak ada secret dalam commit
 - [ ] Commit dengan pesan `feat: add read-only Supabase account checker`
 - [ ] Push ke `origin/main` dan laporkan hash
+
+## Final Audit Login Android
+
+- [x] Audit Auth login, reset password, deep link, dan Git hygiene
+- [x] Jalankan `pnpm check`, test relevan, dan export Android
+- [x] Commit checkpoint hanya jika semua validasi PASS
+- [x] Push checkpoint ke `origin/main`
