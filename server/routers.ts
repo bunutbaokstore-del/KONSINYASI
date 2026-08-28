@@ -413,15 +413,8 @@ export const appRouter = router({
         stockQuantity: z.number().int().min(0).max(1000000000),
         minimumStock: z.number().int().min(0).max(1000000000),
       }))
-      .mutation(async ({ ctx, input }) => {
-        const { distributorId } = await getMitraInScope(ctx, input.mitraUserId);
-        const { data, error } = await getSupabaseAdminClient()
-          .from("consignment_items")
-          .insert({ distributor_id: distributorId, mitra_user_id: input.mitraUserId, name: input.name, sku: input.sku || null, unit: input.unit, stock_quantity: input.stockQuantity, minimum_stock: input.minimumStock })
-          .select("id, name, sku, unit, stock_quantity, minimum_stock, updated_at")
-          .single();
-        if (error || !data) throw new TRPCError({ code: "BAD_REQUEST", message: "Barang titipan belum dapat ditambahkan." });
-        return toConsignmentItem(data);
+      .mutation(() => {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Barang resmi hanya dapat ditambahkan melalui persetujuan supplier." });
       }),
     update: userManagementProcedure
       .input(z.object({
@@ -437,7 +430,7 @@ export const appRouter = router({
         const { distributorId } = await getMitraInScope(ctx, input.mitraUserId);
         const { data, error } = await getSupabaseAdminClient()
           .from("consignment_items")
-          .update({ mitra_user_id: input.mitraUserId, name: input.name, sku: input.sku || null, unit: input.unit, stock_quantity: input.stockQuantity, minimum_stock: input.minimumStock, updated_at: new Date().toISOString() })
+          .update({ mitra_user_id: input.mitraUserId, name: input.name, sku: input.sku || null, unit: input.unit, minimum_stock: input.minimumStock, updated_at: new Date().toISOString() })
           .eq("id", input.itemId)
           .eq("distributor_id", distributorId)
           .select("id, name, sku, unit, stock_quantity, minimum_stock, updated_at")

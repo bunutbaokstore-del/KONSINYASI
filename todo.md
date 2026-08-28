@@ -350,3 +350,12 @@
 - [x] Mempertahankan ikon lonceng di pojok kanan atas
 - [x] Menjalankan TypeScript, lint, test, dan build
 - [ ] Menguji akses notifikasi melalui ikon lonceng di Android
+
+## Inventaris Resmi Hanya dari Persetujuan Supplier
+
+- [x] Menelusuri form Tambah Barang dan mutation inventaris Admin
+- [x] Menghapus atau menonaktifkan tombol Tambah Barang pada dashboard Admin
+- [x] Menutup jalur server untuk penambahan inventaris langsung
+- [x] Memastikan persetujuan supplier tetap membuat atau memperbarui barang resmi
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji alur persetujuan supplier di Android
