@@ -394,3 +394,10 @@
 - [x] Menjaga isolasi penerima berdasarkan user_id dan distributor_id
 - [x] Menjalankan TypeScript, lint, test, dan build
 - [ ] Menguji pesan masuk lintas-role di Android
+
+## Push dan Commit Notifikasi Lintas-Role
+
+- [ ] Memeriksa status branch dan perubahan lokal
+- [ ] Membuat commit perubahan notifikasi terbaru
+- [ ] Push commit ke branch main GitHub
+- [ ] Memverifikasi commit terbaru tersedia di GitHub
