@@ -170,14 +170,24 @@ export default function HomeScreen() {
         </View>
         {role === "mitra_umkm" ? <MitraStockDashboard /> : null}
         {canManageUsers ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Buka Manajemen Pengguna" onPress={() => router.push("/manage-users")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }, pressed && styles.pressed]}>
-            <AppIcon name="group" size={20} color={colors.primary} />
-            <View style={styles.managementCopy}>
-              <Text style={[styles.managementTitle, { color: colors.foreground }]}>Manajemen Pengguna</Text>
-              <Text style={[styles.managementText, { color: colors.muted }]}>Buat dan kelola akun sesuai kewenangan</Text>
-            </View>
-            <AppIcon name="chevron-right" size={20} color={colors.primary} />
-          </Pressable>
+          <>
+            <Pressable accessibilityRole="button" accessibilityLabel="Buka Manajemen Pengguna" onPress={() => router.push("/manage-users")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }, pressed && styles.pressed]}>
+              <AppIcon name="group" size={20} color={colors.primary} />
+              <View style={styles.managementCopy}>
+                <Text style={[styles.managementTitle, { color: colors.foreground }]}>Manajemen Pengguna</Text>
+                <Text style={[styles.managementText, { color: colors.muted }]}>Buat dan kelola akun sesuai kewenangan</Text>
+              </View>
+              <AppIcon name="chevron-right" size={20} color={colors.primary} />
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Buka Kelola Barang Titipan" onPress={() => router.push("/manage-inventory")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }, pressed && styles.pressed]}>
+              <AppIcon name="inventory" size={20} color={colors.primary} />
+              <View style={styles.managementCopy}>
+                <Text style={[styles.managementTitle, { color: colors.foreground }]}>Kelola Barang Titipan</Text>
+                <Text style={[styles.managementText, { color: colors.muted }]}>Atur barang dan stok Mitra UMKM</Text>
+              </View>
+              <AppIcon name="chevron-right" size={20} color={colors.primary} />
+            </Pressable>
+          </>
         ) : null}
       </View>
     </ScreenContainer>

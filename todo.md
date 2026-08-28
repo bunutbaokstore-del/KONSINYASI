@@ -241,6 +241,17 @@
 - [x] Menjalankan TypeScript, lint, test, dan build
 - [ ] Menguji tampilan dashboard Mitra UMKM di Android secara manual
 
+## Pengelolaan Barang Titipan oleh Admin
+
+- [x] Mendokumentasikan field dan alur CRUD barang titipan
+- [x] Menambahkan API daftar, tambah, edit, dan hapus barang untuk Admin
+- [x] Menerapkan validasi stok, batas minimum, satuan, dan ruang kerja
+- [x] Membuat form Admin untuk barang titipan
+- [x] Menampilkan daftar barang Admin dengan status stok
+- [x] Menjaga dashboard Mitra menerima perubahan data barang
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji form Admin dan dashboard Mitra di Android secara manual
+
 ## Pengembalian Daftar Pengguna Inline
 
 - [x] Mendokumentasikan permintaan pengembalian tampilan

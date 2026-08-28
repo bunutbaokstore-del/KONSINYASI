@@ -4,6 +4,7 @@ export type StockStatus = (typeof STOCK_STATUSES)[number];
 
 export type ConsignmentItem = {
   id: string;
+  mitraUserId?: string;
   name: string;
   sku: string | null;
   unit: string;
