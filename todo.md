@@ -309,3 +309,11 @@
 - [x] Menyederhanakan Manajemen Pengguna agar form tidak menampilkan daftar di bawahnya
 - [x] Menjaga guard role dan validasi server yang sudah ada
 - [x] Memvalidasi TypeScript, lint, dan test; navigasi Android manual menunggu
+
+## Perbaikan Tombol Persetujuan Supplier Admin
+
+- [x] Menelusuri penyebab tombol Setujui dan Tolak tidak merespons
+- [x] Memperbaiki handler mutation review Admin
+- [x] Menampilkan feedback loading/error dan menyegarkan riwayat setelah review
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji persetujuan supplier di Android secara manual
