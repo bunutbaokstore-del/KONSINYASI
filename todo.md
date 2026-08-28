@@ -401,3 +401,4 @@
 - [x] Membuat commit perubahan notifikasi terbaru
 - [x] Push commit ke branch main GitHub
 - [x] Memverifikasi commit terbaru tersedia di GitHub
+- [x] Bug: preview Expo Android menampilkan pesan “Something went wrong”; audit log dan perbaiki jalur bundle atau koneksi runtime
