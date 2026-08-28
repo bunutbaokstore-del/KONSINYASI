@@ -368,3 +368,12 @@
 - [x] Memastikan jumlah terisolasi berdasarkan distributor_id
 - [x] Menjalankan TypeScript, lint, test, dan build
 - [ ] Menguji badge pengajuan pending di Android
+
+## Perbaikan Badge Pending dan Daftar Pengajuan Admin
+
+- [x] Menelusuri penyebab badge pending tidak cocok dengan daftar pengajuan
+- [x] Mengarahkan ikon lonceng Admin ke daftar persetujuan supplier yang benar
+- [x] Menampilkan pengajuan pending yang sesuai dengan jumlah badge
+- [x] Memastikan pengajuan tetap terisolasi berdasarkan distributor_id
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji alur Mitra mengajukan lalu Admin membuka pengajuan di Android

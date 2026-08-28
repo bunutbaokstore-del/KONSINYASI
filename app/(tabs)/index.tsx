@@ -149,7 +149,7 @@ export default function HomeScreen() {
             <Text style={[styles.eyebrow, { color: colors.primary }]}>KONSINYASI</Text>
             <Text style={[styles.greeting, { color: colors.foreground }]}>Halo, {displayName}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={user?.role === "admin" && pendingNewItemCount > 0 ? `Buka notifikasi, ${pendingNewItemCount} pengajuan barang baru menunggu persetujuan` : headerBadgeCount > 0 ? `Buka notifikasi, ${headerBadgeCount} belum dibaca` : "Buka notifikasi"} onPress={() => router.push("/notifications")} style={({ pressed }) => [styles.notificationButton, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && styles.pressed]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={user?.role === "admin" && pendingNewItemCount > 0 ? `Buka persetujuan supplier, ${pendingNewItemCount} pengajuan barang baru menunggu persetujuan` : headerBadgeCount > 0 ? `Buka notifikasi, ${headerBadgeCount} belum dibaca` : "Buka notifikasi"} onPress={() => router.push(user?.role === "admin" && pendingNewItemCount > 0 ? "/supplier-requests" : "/notifications")} style={({ pressed }) => [styles.notificationButton, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && styles.pressed]}>
             <AppIcon name="notifications" size={22} color={colors.primary} />
             {headerBadgeCount > 0 ? <View style={[styles.notificationBadge, { backgroundColor: colors.error }]}><Text style={[styles.notificationBadgeText, { color: colors.background }]}>{headerBadgeCount > 9 ? "9+" : headerBadgeCount}</Text></View> : null}
           </Pressable>
