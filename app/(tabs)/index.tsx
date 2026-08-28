@@ -24,6 +24,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user, loading, isAuthenticated } = useAuth();
   const { signIn } = useSupabaseAuth();
+  const notificationsQuery = trpc.notifications.list.useQuery(undefined, { enabled: isAuthenticated });
+  const unreadNotificationCount = (notificationsQuery.data ?? []).filter((notification) => !notification.isRead).length;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
@@ -144,6 +146,10 @@ export default function HomeScreen() {
             <Text style={[styles.eyebrow, { color: colors.primary }]}>KONSINYASI</Text>
             <Text style={[styles.greeting, { color: colors.foreground }]}>Halo, {displayName}</Text>
           </View>
+          <Pressable accessibilityRole="button" accessibilityLabel={unreadNotificationCount > 0 ? `Buka notifikasi, ${unreadNotificationCount} belum dibaca` : "Buka notifikasi"} onPress={() => router.push("/notifications")} style={({ pressed }) => [styles.notificationButton, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && styles.pressed]}>
+            <AppIcon name="notifications" size={22} color={colors.primary} />
+            {unreadNotificationCount > 0 ? <View style={[styles.notificationBadge, { backgroundColor: colors.error }]}><Text style={[styles.notificationBadgeText, { color: colors.background }]}>{unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}</Text></View> : null}
+          </Pressable>
         </View>
 
         <View style={[styles.welcomeCard, { backgroundColor: colors.primary }]}>
@@ -292,7 +298,7 @@ const styles = StyleSheet.create({
   errorText: { width: "100%", fontSize: 13, lineHeight: 19, textAlign: "center", marginTop: 12 },
   loadingText: { marginTop: 14, fontSize: 14 },
   homeContent: { flex: 1, paddingTop: 14 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, notificationButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center", position: "relative" }, notificationBadge: { position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#FFFFFF" }, notificationBadgeText: { fontSize: 9, lineHeight: 12, fontWeight: "900" },
   greeting: { fontSize: 27, lineHeight: 34, fontWeight: "800", letterSpacing: -0.4 },
   welcomeCard: { borderRadius: 24, padding: 22, marginTop: 28 },
   cardIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: "#F7F8F4", alignItems: "center", justifyContent: "center", marginBottom: 20 },

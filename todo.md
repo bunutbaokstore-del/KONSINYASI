@@ -325,3 +325,21 @@
 - [x] Memastikan logout tetap tersedia melalui Profil
 - [x] Menjalankan TypeScript, lint, test, dan build
 - [ ] Menguji navigasi logout melalui Profil di Android
+
+## Ikon Lonceng Notifikasi di Header Dashboard
+
+- [x] Menelusuri endpoint dan halaman notifikasi yang tersedia
+- [x] Menambahkan ikon lonceng di pojok kanan atas dashboard
+- [x] Menampilkan jumlah notifikasi belum dibaca sebagai badge
+- [x] Menghubungkan ikon lonceng ke halaman Notifikasi
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji notifikasi tiap role di Android
+
+## Ikon Lonceng Notifikasi di Header Dashboard
+
+- [x] Menelusuri endpoint dan halaman notifikasi yang tersedia
+- [x] Menambahkan ikon lonceng di pojok kanan atas dashboard
+- [x] Menampilkan jumlah notifikasi belum dibaca sebagai badge
+- [x] Menghubungkan ikon lonceng ke halaman Notifikasi
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji notifikasi tiap role di Android
