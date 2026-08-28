@@ -22,7 +22,7 @@ import {
 export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { user, loading, isAuthenticated, logout } = useAuth();
+  const { user, loading, isAuthenticated } = useAuth();
   const { signIn } = useSupabaseAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -144,14 +144,6 @@ export default function HomeScreen() {
             <Text style={[styles.eyebrow, { color: colors.primary }]}>KONSINYASI</Text>
             <Text style={[styles.greeting, { color: colors.foreground }]}>Halo, {displayName}</Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Keluar dari akun"
-            onPress={logout}
-            style={({ pressed }) => [styles.iconButton, { borderColor: colors.border }, pressed && styles.pressed]}
-          >
-            <AppIcon name="logout" size={21} color={colors.primary} />
-          </Pressable>
         </View>
 
         <View style={[styles.welcomeCard, { backgroundColor: colors.primary }]}>
@@ -302,7 +294,6 @@ const styles = StyleSheet.create({
   homeContent: { flex: 1, paddingTop: 14 },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   greeting: { fontSize: 27, lineHeight: 34, fontWeight: "800", letterSpacing: -0.4 },
-  iconButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   welcomeCard: { borderRadius: 24, padding: 22, marginTop: 28 },
   cardIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: "#F7F8F4", alignItems: "center", justifyContent: "center", marginBottom: 20 },
   cardTitle: { fontSize: 22, lineHeight: 28, fontWeight: "800" },

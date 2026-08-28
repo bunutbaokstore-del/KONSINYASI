@@ -317,3 +317,11 @@
 - [x] Menampilkan feedback loading/error dan menyegarkan riwayat setelah review
 - [x] Menjalankan TypeScript, lint, test, dan build
 - [ ] Menguji persetujuan supplier di Android secara manual
+
+## Penghapusan Ikon Keluar dari Dashboard
+
+- [x] Menemukan ikon atau tombol keluar di header dashboard setiap role
+- [x] Menghapus jalur keluar dari header dashboard
+- [x] Memastikan logout tetap tersedia melalui Profil
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji navigasi logout melalui Profil di Android
