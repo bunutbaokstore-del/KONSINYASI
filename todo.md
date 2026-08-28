@@ -264,6 +264,15 @@
 - [x] Menjalankan TypeScript, lint, test, dan build
 - [ ] Menguji alur persetujuan di Android secara manual
 
+## Status Pengajuan Mitra UMKM
+
+- [x] Mendokumentasikan status Pending, Disetujui, dan Ditolak
+- [x] Menampilkan daftar status pengajuan hanya untuk Mitra pemilik
+- [x] Menampilkan catatan Admin dan waktu pemeriksaan
+- [x] Menambahkan refresh dan state loading/error/empty
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji status pengajuan di Android secara manual
+
 ## Audit Mutasi Stok dan Notifikasi
 
 - [x] Mendokumentasikan struktur audit stok dan notifikasi
