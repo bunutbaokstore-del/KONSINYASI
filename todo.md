@@ -343,3 +343,10 @@
 - [x] Menghubungkan ikon lonceng ke halaman Notifikasi
 - [x] Menjalankan TypeScript, lint, test, dan build
 - [ ] Menguji notifikasi tiap role di Android
+
+## Penghapusan Kartu Notifikasi dari Dashboard
+
+- [x] Menghapus kartu Notifikasi dari isi dashboard semua role
+- [x] Mempertahankan ikon lonceng di pojok kanan atas
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji akses notifikasi melalui ikon lonceng di Android
