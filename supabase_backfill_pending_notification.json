@@ -1,0 +1,4 @@
+{
+  "project_id": "htddsfqjhmejenldsxod",
+  "query": "insert into public.notifications (recipient_user_id, distributor_id, request_id, notification_type, title, body) select 'e6517130-e4fe-4e35-a323-4269cf486a0f'::uuid, '51878281-b41a-4b05-a15b-fb776d2355e7'::uuid, r.id, 'request_pending', 'Pengajuan barang baru', 'Mitra UMKM mengajukan barang “kopi cap inaq 200” untuk diperiksa.' from public.consignment_requests r where r.id = 'd8c046b4-1edf-44d8-aeca-a8e9f91e50e7'::uuid and r.status = 'pending' and not exists (select 1 from public.notifications n where n.recipient_user_id = 'e6517130-e4fe-4e35-a323-4269cf486a0f'::uuid and n.request_id = r.id and n.notification_type = 'request_pending') limit 1"
+}

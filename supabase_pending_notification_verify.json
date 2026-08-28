@@ -1,0 +1,4 @@
+{
+  "project_id": "htddsfqjhmejenldsxod",
+  "query": "select id, recipient_user_id, request_id, notification_type, title, is_read, created_at from public.notifications where request_id = 'd8c046b4-1edf-44d8-aeca-a8e9f91e50e7'::uuid limit 10"
+}

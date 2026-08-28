@@ -1,0 +1,4 @@
+{
+  "project_id": "htddsfqjhmejenldsxod",
+  "query": "select id, raw_app_meta_data->>'role' as role, raw_app_meta_data->>'distributor_id' as distributor_id from auth.users where raw_app_meta_data->>'role' = 'admin' and raw_app_meta_data->>'distributor_id' = '51878281-b41a-4b05-a15b-fb776d2355e7' limit 50"
+}

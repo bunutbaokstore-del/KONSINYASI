@@ -384,3 +384,13 @@
 - [x] Membuat commit perubahan terbaru KONSINYASI
 - [x] Push commit ke branch GitHub yang terhubung
 - [x] Memverifikasi commit tersedia di GitHub
+
+## Notifikasi Lonceng sebagai Pesan Masuk Lintas-Role
+
+- [x] Menelusuri model notifikasi dan alur pengajuan supplier
+- [x] Membuat pesan masuk untuk Admin saat Mitra mengajukan barang baru
+- [x] Membuat pesan masuk untuk Admin saat Mitra mengajukan perubahan stok
+- [x] Menyaring badge dan halaman lonceng dari riwayat aktivitas sendiri
+- [x] Menjaga isolasi penerima berdasarkan user_id dan distributor_id
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji pesan masuk lintas-role di Android

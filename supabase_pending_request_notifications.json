@@ -1,0 +1,5 @@
+{
+  "project_id": "htddsfqjhmejenldsxod",
+  "name": "pending_request_notifications",
+  "query": "alter table public.notifications drop constraint if exists notifications_notification_type_check; alter table public.notifications add constraint notifications_notification_type_check check (notification_type in ('request_pending', 'request_approved', 'request_rejected', 'stock_updated'));"
+}
