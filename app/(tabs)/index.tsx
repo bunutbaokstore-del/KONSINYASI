@@ -25,7 +25,10 @@ export default function HomeScreen() {
   const { user, loading, isAuthenticated } = useAuth();
   const { signIn } = useSupabaseAuth();
   const notificationsQuery = trpc.notifications.list.useQuery(undefined, { enabled: isAuthenticated });
+  const pendingNewItemCountQuery = trpc.supplier.pendingNewItemCount.useQuery(undefined, { enabled: isAuthenticated && user?.role === "admin", refetchInterval: 30000 });
   const unreadNotificationCount = (notificationsQuery.data ?? []).filter((notification) => !notification.isRead).length;
+  const pendingNewItemCount = pendingNewItemCountQuery.data?.count ?? 0;
+  const headerBadgeCount = user?.role === "admin" ? pendingNewItemCount : unreadNotificationCount;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
@@ -146,9 +149,9 @@ export default function HomeScreen() {
             <Text style={[styles.eyebrow, { color: colors.primary }]}>KONSINYASI</Text>
             <Text style={[styles.greeting, { color: colors.foreground }]}>Halo, {displayName}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={unreadNotificationCount > 0 ? `Buka notifikasi, ${unreadNotificationCount} belum dibaca` : "Buka notifikasi"} onPress={() => router.push("/notifications")} style={({ pressed }) => [styles.notificationButton, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && styles.pressed]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={user?.role === "admin" && pendingNewItemCount > 0 ? `Buka notifikasi, ${pendingNewItemCount} pengajuan barang baru menunggu persetujuan` : headerBadgeCount > 0 ? `Buka notifikasi, ${headerBadgeCount} belum dibaca` : "Buka notifikasi"} onPress={() => router.push("/notifications")} style={({ pressed }) => [styles.notificationButton, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && styles.pressed]}>
             <AppIcon name="notifications" size={22} color={colors.primary} />
-            {unreadNotificationCount > 0 ? <View style={[styles.notificationBadge, { backgroundColor: colors.error }]}><Text style={[styles.notificationBadgeText, { color: colors.background }]}>{unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}</Text></View> : null}
+            {headerBadgeCount > 0 ? <View style={[styles.notificationBadge, { backgroundColor: colors.error }]}><Text style={[styles.notificationBadgeText, { color: colors.background }]}>{headerBadgeCount > 9 ? "9+" : headerBadgeCount}</Text></View> : null}
           </Pressable>
         </View>
 

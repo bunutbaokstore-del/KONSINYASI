@@ -474,6 +474,19 @@ export const appRouter = router({
     }),
   }),
   supplier: router({
+    pendingNewItemCount: userManagementProcedure.query(async ({ ctx }) => {
+      if (callerRole(ctx) !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Jumlah pengajuan pending hanya tersedia untuk Admin." });
+      const distributorId = getDistributorId(ctx.supabaseUser);
+      if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja supplier tidak ditemukan." });
+      const { count, error } = await getSupabaseAdminClient()
+        .from("consignment_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("distributor_id", distributorId)
+        .eq("request_type", "new_item")
+        .eq("status", "pending");
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah pengajuan pending belum dapat dimuat." });
+      return { count: count ?? 0 } as const;
+    }),
     requests: supabaseProtectedProcedure.query(async ({ ctx }) => {
       const role = callerRole(ctx);
       const distributorId = getDistributorId(ctx.supabaseUser);

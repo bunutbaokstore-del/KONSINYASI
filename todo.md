@@ -359,3 +359,12 @@
 - [x] Memastikan persetujuan supplier tetap membuat atau memperbarui barang resmi
 - [x] Menjalankan TypeScript, lint, test, dan build
 - [ ] Menguji alur persetujuan supplier di Android
+
+## Badge Pengajuan Pending Admin
+
+- [x] Menelusuri query pengajuan supplier dan header ikon lonceng
+- [x] Menambahkan endpoint jumlah pengajuan barang baru pending untuk Admin
+- [x] Menampilkan badge merah pada ikon lonceng Admin
+- [x] Memastikan jumlah terisolasi berdasarkan distributor_id
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji badge pengajuan pending di Android
