@@ -427,3 +427,34 @@
 - [x] Perbaiki callback/deep link hanya jika akar masalah ditemukan
 - [x] Jalankan test dan validasi Android deep link
 - [x] Commit dan push perubahan tervalidasi ke branch main
+
+## Diagnosis Login Android Gagal Terbaru
+
+- [ ] Audit bundle Android, environment Supabase, project target, dan UI login
+- [ ] Uji endpoint Auth secara aman tanpa mengubah data
+- [ ] Identifikasi penyebab login gagal meskipun email/password benar
+- [ ] Perbaiki hanya akar masalah yang terbukti
+- [ ] Jalankan test dan validasi Android lalu commit/push
+
+## Read-only Supabase Account Check Terbaru
+
+- [x] Audit script dan loader environment yang sudah ada
+- [x] Buat pemeriksaan client connection dengan publishable key
+- [x] Buat input email interaktif dan pemeriksaan status akun read-only
+- [x] Tambahkan command `pnpm supabase:check-account`
+- [x] Jalankan TypeScript/check/test dan validasi script
+- [ ] Jangan commit atau push sebelum persetujuan pengguna
+
+## Audit Sinkronisasi Script Account Check Terbaru
+
+- [x] Verifikasi file `scripts/check-supabase-account.mjs` di working tree Manus
+- [x] Verifikasi command `supabase:check-account` di `package.json`
+- [x] Bandingkan status file dengan remote GitHub tanpa commit atau push
+- [x] Jelaskan langkah sinkronisasi ke working tree Windows pengguna
+
+## Commit Account Checker Disetujui
+
+- [ ] Pastikan diff commit hanya mencakup account checker dan command package terkait
+- [ ] Validasi ulang checker dan pastikan tidak ada secret dalam commit
+- [ ] Commit dengan pesan `feat: add read-only Supabase account checker`
+- [ ] Push ke `origin/main` dan laporkan hash
