@@ -402,3 +402,12 @@
 - [x] Push commit ke branch main GitHub
 - [x] Memverifikasi commit terbaru tersedia di GitHub
 - [x] Bug: preview Expo Android menampilkan pesan “Something went wrong”; audit log dan perbaiki jalur bundle atau koneksi runtime
+
+## Audit Integrasi Supabase Client Terbaru
+
+- [x] Audit bahwa Expo membaca `.env` dan hanya mengekspos variabel `EXPO_PUBLIC_*`
+- [x] Audit bahwa `lib/supabase.ts` membuat client dengan URL dan publishable key project KONSINYASI
+- [x] Audit login agar menggunakan `signInWithPassword` pada Supabase Auth
+- [x] Tambahkan atau gunakan READ-only connection validation tanpa mengubah data production
+- [x] Jalankan TypeScript check, test, dan build/validation relevan
+- [ ] Commit dan push validasi integrasi ke branch main
