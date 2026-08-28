@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import { getApiBaseUrl } from "@/constants/oauth";
 import * as Auth from "./auth";
+import { messageFromApiBody, readJsonOrText } from "./response";
 
 type ApiResponse<T> = {
   data?: T;
@@ -58,28 +59,18 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
     }
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[API] Error response:", errorText);
-      let errorMessage = errorText;
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.error || errorJson.message || errorText;
-      } catch {
-        // Not JSON, use text as is
-      }
-      throw new Error(errorMessage || `API call failed: ${response.statusText}`);
+      const errorBody = await readJsonOrText(response);
+      const errorMessage = messageFromApiBody(errorBody, `API call failed: ${response.statusText}`);
+      console.error("[API] Error response status:", response.status);
+      throw new Error(errorMessage);
     }
 
-    const contentType = response.headers.get("content-type");
-    if (contentType && contentType.includes("application/json")) {
-      const data = await response.json();
-      console.log("[API] JSON response received");
-      return data as T;
+    const data = await readJsonOrText(response);
+    if (typeof data === "string") {
+      throw new Error(`Endpoint mengembalikan text, bukan JSON (HTTP ${response.status})`);
     }
-
-    const text = await response.text();
-    console.log("[API] Text response received");
-    return (text ? JSON.parse(text) : {}) as T;
+    console.log("[API] JSON response received");
+    return data as T;
   } catch (error) {
     console.error("[API] Request failed:", error);
     if (error instanceof Error) {
