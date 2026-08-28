@@ -51,13 +51,19 @@ export function getBearerToken(req: Request) {
   return header.slice("Bearer ".length).trim() || null;
 }
 
+export async function getSupabaseUserFromToken(client: Pick<SupabaseClient, "auth">, token: string): Promise<User | null> {
+  const { data, error } = await client.auth.getUser(token);
+  if (error) return null;
+  return data.user;
+}
+
 export async function getSupabaseUserFromRequest(req: Request): Promise<User | null> {
   const token = getBearerToken(req);
   if (!token) return null;
 
-  const { data, error } = await getSupabaseAdminClient().auth.getUser(token);
-  if (error) return null;
-  return data.user;
+  // Validate the user's access token with the publishable-key client.
+  // The service-role client remains server-only for privileged data operations.
+  return getSupabaseUserFromToken(getSupabasePublicClient(), token);
 }
 
 export function getUserRole(user: User | null): AppRole {
