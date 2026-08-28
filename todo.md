@@ -252,6 +252,18 @@
 - [x] Menjalankan TypeScript, lint, test, dan build
 - [ ] Menguji form Admin dan dashboard Mitra di Android secara manual
 
+## Alur Supplier Mitra dan Persetujuan Admin
+
+- [x] Mendokumentasikan Mitra UMKM sebagai supplier
+- [x] Membuat model pengajuan barang dari Mitra ke Admin
+- [x] Membuat model pengajuan perubahan stok dengan status persetujuan
+- [x] Membatasi Mitra agar hanya melihat barang miliknya
+- [x] Mencegah Mitra mengubah stok atau data barang secara langsung
+- [x] Menambahkan persetujuan Admin sebelum barang/stok menjadi resmi
+- [x] Menyesuaikan dashboard Admin dan Mitra dengan alur pengajuan
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji alur persetujuan di Android secara manual
+
 ## Pengembalian Daftar Pengguna Inline
 
 - [x] Mendokumentasikan permintaan pengembalian tampilan

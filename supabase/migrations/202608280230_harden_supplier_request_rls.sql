@@ -1,0 +1,21 @@
+drop policy if exists "Supplier can read own consignment requests" on public.consignment_requests;
+drop policy if exists "Supplier can submit own consignment requests" on public.consignment_requests;
+
+create policy "Supplier can read own scoped requests"
+  on public.consignment_requests for select to authenticated
+  using (
+    auth.uid() = mitra_user_id
+    and auth.jwt() -> 'app_metadata' ->> 'role' = 'mitra_umkm'
+    and auth.jwt() -> 'app_metadata' ->> 'distributor_id' = distributor_id::text
+  );
+
+create policy "Supplier can submit own scoped requests"
+  on public.consignment_requests for insert to authenticated
+  with check (
+    auth.uid() = mitra_user_id
+    and auth.jwt() -> 'app_metadata' ->> 'role' = 'mitra_umkm'
+    and auth.jwt() -> 'app_metadata' ->> 'distributor_id' = distributor_id::text
+    and status = 'pending'
+    and reviewed_by is null
+    and reviewed_at is null
+  );
