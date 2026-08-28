@@ -397,7 +397,7 @@
 
 ## Push dan Commit Notifikasi Lintas-Role
 
-- [ ] Memeriksa status branch dan perubahan lokal
-- [ ] Membuat commit perubahan notifikasi terbaru
-- [ ] Push commit ke branch main GitHub
-- [ ] Memverifikasi commit terbaru tersedia di GitHub
+- [x] Memeriksa status branch dan perubahan lokal
+- [x] Membuat commit perubahan notifikasi terbaru
+- [x] Push commit ke branch main GitHub
+- [x] Memverifikasi commit terbaru tersedia di GitHub
