@@ -411,3 +411,11 @@
 - [x] Tambahkan atau gunakan READ-only connection validation tanpa mengubah data production
 - [x] Jalankan TypeScript check, test, dan build/validation relevan
 - [ ] Commit dan push validasi integrasi ke branch main
+
+## Diagnosis Login Supabase Auth Android Terbaru
+
+- [x] Audit alur `signInWithPassword`, error Supabase, dan pemulihan session Android
+- [x] Identifikasi penyebab email/password valid tetapi login gagal
+- [x] Perbaiki pesan error UI atau session hanya jika akar masalah ditemukan
+- [x] Jalankan test dan validasi bundle Android setelah perbaikan
+- [x] Commit dan push hasil tervalidasi ke branch main

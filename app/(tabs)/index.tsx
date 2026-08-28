@@ -3,7 +3,7 @@ import { AppIcon } from "@/components/ui/app-icon";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
-import { useSupabaseAuth } from "@/lib/supabase-auth-provider";
+import { formatSupabaseAuthError, useSupabaseAuth } from "@/lib/supabase-auth-provider";
 import { trpc } from "@/lib/trpc";
 import { ROLE_LABELS } from "@/shared/auth";
 import { useRouter } from "expo-router";
@@ -47,7 +47,7 @@ export default function HomeScreen() {
     const { error } = await signIn(normalizedEmail, password);
     setLoginLoading(false);
     if (error) {
-      setLoginError("Email atau kata sandi tidak benar, atau email belum dikonfirmasi.");
+      setLoginError(formatSupabaseAuthError(error));
     }
   };
 

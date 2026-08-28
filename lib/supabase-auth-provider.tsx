@@ -7,6 +7,7 @@ import { createContext, ReactNode, useContext, useEffect, useMemo, useState } fr
 import { AppState } from "react-native";
 
 import { SUPABASE_AUTH_REDIRECT, supabase } from "@/lib/supabase";
+import { formatSupabaseAuthError } from "@/lib/supabase-auth-errors";
 
 type SupabaseAuthContextValue = {
   session: Session | null;
@@ -29,9 +30,17 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data, error }) => {
       if (!mounted) return;
+      if (error) {
+        console.warn("[Supabase Auth] Failed to restore session:", error.message);
+      }
       setSession(data.session);
+      setLoading(false);
+    }).catch((error: unknown) => {
+      if (!mounted) return;
+      console.warn("[Supabase Auth] Session restore failed:", error);
+      setSession(null);
       setLoading(false);
     });
 
@@ -97,6 +106,8 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
 
   return <SupabaseAuthContext.Provider value={value}>{children}</SupabaseAuthContext.Provider>;
 }
+
+export { formatSupabaseAuthError } from "@/lib/supabase-auth-errors";
 
 export function useSupabaseAuth() {
   const context = useContext(SupabaseAuthContext);
