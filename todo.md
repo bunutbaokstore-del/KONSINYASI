@@ -419,3 +419,11 @@
 - [x] Perbaiki pesan error UI atau session hanya jika akar masalah ditemukan
 - [x] Jalankan test dan validasi bundle Android setelah perbaikan
 - [x] Commit dan push hasil tervalidasi ke branch main
+
+## Audit Deep Link Reset Password Android Terbaru
+
+- [x] Audit scheme Expo `konsinyasi`, redirect URL, callback `/auth/callback`, dan recovery session
+- [x] Pastikan flow Android tidak memakai `localhost:3000`
+- [x] Perbaiki callback/deep link hanya jika akar masalah ditemukan
+- [x] Jalankan test dan validasi Android deep link
+- [x] Commit dan push perubahan tervalidasi ke branch main

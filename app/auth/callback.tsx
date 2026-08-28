@@ -1,19 +1,11 @@
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { supabase } from "@/lib/supabase";
+import { isPasswordRecoveryLink, parseSupabaseAuthUrl } from "@/lib/supabase-deep-link";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Linking from "expo-linking";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-
-function tokensFromUrl(url: string) {
-  const hash = url.includes("#") ? url.split("#")[1] : "";
-  const params = new URLSearchParams(hash);
-  return {
-    accessToken: params.get("access_token"),
-    refreshToken: params.get("refresh_token"),
-  };
-}
 
 export default function SupabaseAuthCallbackScreen() {
   const colors = useColors();
@@ -32,7 +24,8 @@ export default function SupabaseAuthCallbackScreen() {
         return;
       }
 
-      const { accessToken, refreshToken } = tokensFromUrl(url);
+      const tokens = parseSupabaseAuthUrl(url);
+      const { accessToken, refreshToken } = tokens;
       if (!accessToken || !refreshToken) {
         if (mounted) setError("Tautan autentikasi tidak valid atau sudah kedaluwarsa.");
         return;
@@ -48,7 +41,7 @@ export default function SupabaseAuthCallbackScreen() {
       }
 
       if (mounted) {
-        router.replace(params.mode === "reset" ? ("/reset-password" as never) : "/");
+        router.replace(isPasswordRecoveryLink(tokens, params.mode) ? ("/reset-password" as never) : "/");
       }
     };
 
