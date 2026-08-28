@@ -264,6 +264,18 @@
 - [x] Menjalankan TypeScript, lint, test, dan build
 - [ ] Menguji alur persetujuan di Android secara manual
 
+## Audit Mutasi Stok dan Notifikasi
+
+- [x] Mendokumentasikan struktur audit stok dan notifikasi
+- [x] Menyiapkan tabel riwayat mutasi stok dengan RLS
+- [x] Menyiapkan tabel notifikasi in-app dengan RLS
+- [x] Mencatat audit dan membuat notifikasi setelah request diproses
+- [x] Menambahkan layar riwayat mutasi stok
+- [x] Menambahkan tampilan notifikasi untuk Mitra dan Admin
+- [x] Menandai notifikasi sudah dibaca
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji audit dan notifikasi di Android secara manual
+
 ## Pengembalian Daftar Pengguna Inline
 
 - [x] Mendokumentasikan permintaan pengembalian tampilan

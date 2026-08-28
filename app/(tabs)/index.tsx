@@ -168,6 +168,18 @@ export default function HomeScreen() {
             <Text style={[styles.roleBadgeText, { color: colors.primary }]}>{ROLE_LABELS[role]}</Text>
           </View>
         </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Buka notifikasi" onPress={() => router.push("/notifications")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && styles.pressed]}>
+          <AppIcon name="verified" size={20} color={colors.primary} />
+          <View style={styles.managementCopy}><Text style={[styles.managementTitle, { color: colors.foreground }]}>Notifikasi</Text><Text style={[styles.managementText, { color: colors.muted }]}>Lihat status pengajuan yang diproses Admin</Text></View>
+          <AppIcon name="chevron-right" size={20} color={colors.primary} />
+        </Pressable>
+        {(role === "mitra_umkm" || canManageUsers) ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Buka riwayat mutasi stok" onPress={() => router.push("/stock-history")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && styles.pressed]}>
+            <AppIcon name="inventory" size={20} color={colors.primary} />
+            <View style={styles.managementCopy}><Text style={[styles.managementTitle, { color: colors.foreground }]}>Riwayat mutasi stok</Text><Text style={[styles.managementText, { color: colors.muted }]}>Lihat catatan perubahan stok yang disetujui</Text></View>
+            <AppIcon name="chevron-right" size={20} color={colors.primary} />
+          </Pressable>
+        ) : null}
         {role === "mitra_umkm" ? <MitraStockDashboard /> : null}
         {role === "mitra_umkm" ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Ajukan barang atau perubahan stok" onPress={() => router.push("/supplier-requests")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }, pressed && styles.pressed]}>

@@ -106,6 +106,14 @@ function toSupplierRequest(request: { id: string; request_type: string; item_id?
   } as const;
 }
 
+function toStockMovement(movement: { id: string; item_id: string; previous_stock: number; change_quantity: number; resulting_stock: number; movement_type: string; reason: string; created_at: string }) {
+  return { id: movement.id, itemId: movement.item_id, previousStock: movement.previous_stock, changeQuantity: movement.change_quantity, resultingStock: movement.resulting_stock, movementType: movement.movement_type, reason: movement.reason, createdAt: movement.created_at } as const;
+}
+
+function toNotification(notification: { id: string; notification_type: string; title: string; body: string; is_read: boolean; request_id?: string | null; created_at: string }) {
+  return { id: notification.id, notificationType: notification.notification_type, title: notification.title, body: notification.body, isRead: notification.is_read, requestId: notification.request_id ?? null, createdAt: notification.created_at } as const;
+}
+
 function toManagedUser(user: { id: string; email?: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown>; created_at: string; last_sign_in_at?: string | null }) {
   const role = getUserRole(user as never);
   const status = user.app_metadata?.status === "disabled" ? "disabled" : "active";
@@ -447,6 +455,31 @@ export const appRouter = router({
         return { success: true } as const;
       }),
   }),
+  stockMovements: router({
+    list: supabaseProtectedProcedure.query(async ({ ctx }) => {
+      const role = callerRole(ctx);
+      const distributorId = getDistributorId(ctx.supabaseUser);
+      if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja tidak ditemukan." });
+      let query = getSupabaseAdminClient().from("stock_movements").select("id, item_id, previous_stock, change_quantity, resulting_stock, movement_type, reason, created_at").eq("distributor_id", distributorId).order("created_at", { ascending: false }).limit(100);
+      if (role === "mitra_umkm") query = query.eq("mitra_user_id", ctx.supabaseUser.id);
+      else if (role !== "admin" && role !== "distributor") throw new TRPCError({ code: "FORBIDDEN", message: "Role ini tidak dapat melihat audit stok." });
+      const { data, error } = await query;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Riwayat stok belum dapat dimuat." });
+      return (data ?? []).map(toStockMovement);
+    }),
+  }),
+  notifications: router({
+    list: supabaseProtectedProcedure.query(async ({ ctx }) => {
+      const { data, error } = await getSupabaseAdminClient().from("notifications").select("id, notification_type, title, body, is_read, request_id, created_at").eq("recipient_user_id", ctx.supabaseUser.id).order("created_at", { ascending: false }).limit(50);
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Notifikasi belum dapat dimuat." });
+      return (data ?? []).map(toNotification);
+    }),
+    markRead: supabaseProtectedProcedure.input(z.object({ notificationId: z.string().uuid() })).mutation(async ({ ctx, input }) => {
+      const { error } = await getSupabaseAdminClient().from("notifications").update({ is_read: true }).eq("id", input.notificationId).eq("recipient_user_id", ctx.supabaseUser.id);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: "Notifikasi belum dapat ditandai dibaca." });
+      return { success: true } as const;
+    }),
+  }),
   supplier: router({
     requests: supabaseProtectedProcedure.query(async ({ ctx }) => {
       const role = callerRole(ctx);
@@ -503,14 +536,21 @@ export const appRouter = router({
         if (request.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "Pengajuan ini sudah diproses." });
 
         let itemId = request.item_id ?? null;
+        let previousStock = 0;
+        let resultingStock: number | null = null;
         if (input.decision === "approved" && request.request_type === "new_item") {
           if (!request.proposed_name || !request.proposed_unit || request.proposed_stock_quantity === null || request.proposed_minimum_stock === null) throw new TRPCError({ code: "BAD_REQUEST", message: "Data pengajuan barang tidak lengkap." });
           const { data: newItem, error: itemError } = await adminClient.from("consignment_items").insert({ distributor_id: distributorId, mitra_user_id: request.mitra_user_id, name: request.proposed_name, sku: request.proposed_sku, unit: request.proposed_unit, stock_quantity: request.proposed_stock_quantity, minimum_stock: request.proposed_minimum_stock }).select("id").single();
           if (itemError || !newItem) throw new TRPCError({ code: "BAD_REQUEST", message: "Barang resmi belum dapat dibuat." });
           itemId = newItem.id;
+          resultingStock = request.proposed_stock_quantity;
         } else if (input.decision === "approved" && request.request_type === "stock_change") {
           if (!request.item_id || request.proposed_stock_quantity === null) throw new TRPCError({ code: "BAD_REQUEST", message: "Data perubahan stok tidak lengkap." });
-          const { data: updatedItem, error: itemError } = await adminClient.from("consignment_items").update({ stock_quantity: request.proposed_stock_quantity, updated_at: new Date().toISOString() }).eq("id", request.item_id).eq("distributor_id", distributorId).eq("mitra_user_id", request.mitra_user_id).select("id").maybeSingle();
+          const { data: currentItem, error: currentItemError } = await adminClient.from("consignment_items").select("id, stock_quantity").eq("id", request.item_id).eq("distributor_id", distributorId).eq("mitra_user_id", request.mitra_user_id).maybeSingle();
+          if (currentItemError || !currentItem) throw new TRPCError({ code: "NOT_FOUND", message: "Barang untuk perubahan stok tidak ditemukan." });
+          previousStock = currentItem.stock_quantity;
+          resultingStock = request.proposed_stock_quantity;
+          const { data: updatedItem, error: itemError } = await adminClient.from("consignment_items").update({ stock_quantity: resultingStock, updated_at: new Date().toISOString() }).eq("id", request.item_id).eq("distributor_id", distributorId).eq("mitra_user_id", request.mitra_user_id).select("id").maybeSingle();
           if (itemError || !updatedItem) throw new TRPCError({ code: "NOT_FOUND", message: "Barang untuk perubahan stok tidak ditemukan." });
         }
 
@@ -518,6 +558,16 @@ export const appRouter = router({
         if (!reviewerId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sesi Admin tidak ditemukan." });
         const { data: updatedRequest, error: reviewError } = await adminClient.from("consignment_requests").update({ status: input.decision, reviewed_by: reviewerId, review_note: input.reviewNote?.trim() || null, reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString(), item_id: itemId }).eq("id", input.requestId).eq("status", "pending").select("id, request_type, item_id, mitra_user_id, proposed_name, proposed_sku, proposed_unit, proposed_stock_quantity, proposed_minimum_stock, reason, status, review_note, reviewed_at, created_at").single();
         if (reviewError || !updatedRequest) throw new TRPCError({ code: "BAD_REQUEST", message: "Keputusan pengajuan belum dapat disimpan." });
+
+        if (input.decision === "approved" && itemId && resultingStock !== null) {
+          const { error: auditError } = await adminClient.from("stock_movements").insert({ distributor_id: distributorId, mitra_user_id: request.mitra_user_id, item_id: itemId, request_id: request.id, previous_stock: previousStock, change_quantity: resultingStock - previousStock, resulting_stock: resultingStock, movement_type: request.request_type === "new_item" ? "initial_stock" : "supplier_stock_change", reason: request.reason, approved_by: reviewerId });
+          if (auditError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Keputusan tersimpan, tetapi audit stok belum dapat dibuat." });
+        }
+
+        const notificationTitle = input.decision === "approved" ? "Pengajuan supplier disetujui" : "Pengajuan supplier ditolak";
+        const notificationBody = input.decision === "approved" ? "Pengajuan Anda telah disetujui Admin dan data resmi sudah diperbarui." : `Pengajuan Anda ditolak Admin${input.reviewNote?.trim() ? `: ${input.reviewNote.trim()}` : "."}`;
+        const { error: notificationError } = await adminClient.from("notifications").insert({ recipient_user_id: request.mitra_user_id, distributor_id: distributorId, request_id: request.id, notification_type: input.decision === "approved" ? "request_approved" : "request_rejected", title: notificationTitle, body: notificationBody });
+        if (notificationError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Keputusan tersimpan, tetapi notifikasi belum dapat dibuat." });
         return toSupplierRequest(updatedRequest);
       }),
   }),
