@@ -2,11 +2,12 @@ import { COOKIE_NAME } from "../shared/const.js";
 import { isManagedRole, ROLE_LABELS, type AppRole } from "../shared/auth";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router, userManagementProcedure } from "./_core/trpc";
+import { publicProcedure, router, supabaseProtectedProcedure, userManagementProcedure } from "./_core/trpc";
 import { getDistributorId, getSupabaseAdminClient, getSupabasePublicClient, getUserRole } from "./supabase-admin";
 import { TRPCError } from "@trpc/server";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { KTP_CONTENT_TYPES } from "../shared/user-profile";
+import { getStockStatus, summarizeStock, type ConsignmentItem } from "../shared/consignment";
 import { z } from "zod";
 
 const roleSchema = z.enum(["distributor", "admin", "mitra_umkm", "supervisor", "sales_motoris", "hrd"]);
@@ -325,6 +326,43 @@ export const appRouter = router({
         }
         return { success: true } as const;
       }),
+  }),
+  mitraDashboard: router({
+    stock: supabaseProtectedProcedure.query(async ({ ctx }) => {
+      const role = callerRole(ctx);
+      if (role !== "mitra_umkm") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Dashboard stok ini hanya tersedia untuk Mitra UMKM." });
+      }
+
+      const distributorId = getDistributorId(ctx.supabaseUser);
+      if (!distributorId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Mitra UMKM tidak ditemukan." });
+      }
+
+      const { data, error } = await getSupabaseAdminClient()
+        .from("consignment_items")
+        .select("id, name, sku, unit, stock_quantity, minimum_stock, updated_at")
+        .eq("mitra_user_id", ctx.supabaseUser.id)
+        .eq("distributor_id", distributorId)
+        .order("updated_at", { ascending: false });
+
+      if (error) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Daftar barang titipan belum dapat dimuat." });
+      }
+
+      const items = (data ?? []).map((item) => ({
+        id: item.id,
+        name: item.name,
+        sku: item.sku ?? null,
+        unit: item.unit,
+        stockQuantity: item.stock_quantity,
+        minimumStock: item.minimum_stock,
+        status: getStockStatus(item.stock_quantity, item.minimum_stock),
+        updatedAt: item.updated_at,
+      })) as ConsignmentItem[];
+
+      return { items, summary: summarizeStock(items) };
+    }),
   }),
 });
 

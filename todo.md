@@ -229,6 +229,18 @@
 - [x] Memvalidasi TypeScript, lint, dan test
 - [ ] Menguji alur pendaftaran Distributor dan Tambah Pengguna di Android secara manual
 
+## Barang Titipan dan Status Stok Mitra UMKM
+
+- [x] Mendokumentasikan model barang, jumlah stok, dan status stok
+- [x] Menyiapkan tabel barang titipan dengan isolasi distributor dan mitra
+- [x] Menambahkan API daftar barang dan ringkasan status stok
+- [x] Menambahkan kartu daftar barang titipan pada dashboard Mitra UMKM
+- [x] Menambahkan ringkasan jumlah stok dan status stok
+- [x] Menangani loading, error, empty state, dan refresh
+- [x] Memvalidasi isolasi role dan data ruang kerja
+- [x] Menjalankan TypeScript, lint, test, dan build
+- [ ] Menguji tampilan dashboard Mitra UMKM di Android secara manual
+
 ## Pengembalian Daftar Pengguna Inline
 
 - [x] Mendokumentasikan permintaan pengembalian tampilan

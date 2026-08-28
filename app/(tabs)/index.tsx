@@ -4,12 +4,15 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { useSupabaseAuth } from "@/lib/supabase-auth-provider";
+import { trpc } from "@/lib/trpc";
 import { ROLE_LABELS } from "@/shared/auth";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -165,6 +168,7 @@ export default function HomeScreen() {
             <Text style={[styles.roleBadgeText, { color: colors.primary }]}>{ROLE_LABELS[role]}</Text>
           </View>
         </View>
+        {role === "mitra_umkm" ? <MitraStockDashboard /> : null}
         {canManageUsers ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Buka Manajemen Pengguna" onPress={() => router.push("/manage-users")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }, pressed && styles.pressed]}>
             <AppIcon name="group" size={20} color={colors.primary} />
@@ -177,6 +181,60 @@ export default function HomeScreen() {
         ) : null}
       </View>
     </ScreenContainer>
+  );
+}
+
+function MitraStockDashboard() {
+  const colors = useColors();
+  const stockQuery = trpc.mitraDashboard.stock.useQuery();
+  const items = stockQuery.data?.items ?? [];
+  const summary = stockQuery.data?.summary ?? {
+    itemCount: 0,
+    totalUnits: 0,
+    safeCount: 0,
+    lowCount: 0,
+    outOfStockCount: 0,
+  };
+
+  if (stockQuery.isLoading) {
+    return <View style={styles.stockLoading}><ActivityIndicator color={colors.primary} /><Text style={[styles.stockLoadingText, { color: colors.muted }]}>Memuat stok barang titipan…</Text></View>;
+  }
+
+  if (stockQuery.error) {
+    return <View style={[styles.stockErrorCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.stockSectionTitle, { color: colors.foreground }]}>Barang titipan</Text><Text style={[styles.stockErrorText, { color: colors.error }]}>{stockQuery.error.message}</Text><Pressable accessibilityRole="button" onPress={() => void stockQuery.refetch()} style={({ pressed }) => [styles.stockRetryButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.stockRetryText, { color: colors.primary }]}>Coba lagi</Text></Pressable></View>;
+  }
+
+  return (
+    <View style={styles.stockDashboard}>
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.id}
+        style={styles.stockList}
+        contentContainerStyle={styles.stockListContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={stockQuery.isRefetching} onRefresh={() => void stockQuery.refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.stockSectionHeader}>
+              <View style={styles.stockSectionCopy}><Text style={[styles.stockSectionTitle, { color: colors.foreground }]}>Barang titipan</Text><Text style={[styles.stockSectionSubtitle, { color: colors.muted }]}>Pantau persediaan yang menjadi tanggung jawab Anda</Text></View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Muat ulang stok barang" onPress={() => void stockQuery.refetch()} style={({ pressed }) => [styles.stockRefreshButton, { borderColor: colors.border }, pressed && styles.pressed]}><AppIcon name="refresh" size={18} color={colors.primary} /></Pressable>
+            </View>
+            <View style={styles.summaryGrid}>
+              <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.summaryValue, { color: colors.foreground }]}>{summary.itemCount}</Text><Text style={[styles.summaryLabel, { color: colors.muted }]}>Jenis barang</Text></View>
+              <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.summaryValue, { color: colors.foreground }]}>{summary.totalUnits}</Text><Text style={[styles.summaryLabel, { color: colors.muted }]}>Total unit</Text></View>
+              <View style={[styles.summaryCard, { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}45` }]}><Text style={[styles.summaryValue, { color: colors.warning }]}>{summary.lowCount + summary.outOfStockCount}</Text><Text style={[styles.summaryLabel, { color: colors.muted }]}>Perlu cek</Text></View>
+            </View>
+            <View style={styles.statusLegend}><View style={styles.statusLegendItem}><View style={[styles.statusDot, { backgroundColor: colors.success }]} /><Text style={[styles.statusLegendText, { color: colors.muted }]}>Aman {summary.safeCount}</Text></View><View style={styles.statusLegendItem}><View style={[styles.statusDot, { backgroundColor: colors.warning }]} /><Text style={[styles.statusLegendText, { color: colors.muted }]}>Menipis {summary.lowCount}</Text></View><View style={styles.statusLegendItem}><View style={[styles.statusDot, { backgroundColor: colors.error }]} /><Text style={[styles.statusLegendText, { color: colors.muted }]}>Habis {summary.outOfStockCount}</Text></View></View>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const statusColor = item.status === "aman" ? colors.success : item.status === "menipis" ? colors.warning : colors.error;
+          const statusLabel = item.status === "aman" ? "Aman" : item.status === "menipis" ? "Menipis" : "Habis";
+          return <View style={[styles.stockItemCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={[styles.stockItemIcon, { backgroundColor: `${colors.primary}16` }]}><AppIcon name="inventory" size={21} color={colors.primary} /></View><View style={styles.stockItemCopy}><Text style={[styles.stockItemName, { color: colors.foreground }]}>{item.name}</Text>{item.sku ? <Text style={[styles.stockItemSku, { color: colors.muted }]}>Kode: {item.sku}</Text> : null}<Text style={[styles.stockItemUpdated, { color: colors.muted }]}>Diperbarui {new Date(item.updatedAt).toLocaleDateString("id-ID")}</Text></View><View style={styles.stockItemRight}><Text style={[styles.stockQuantity, { color: colors.foreground }]}>{item.stockQuantity}</Text><Text style={[styles.stockUnit, { color: colors.muted }]}>{item.unit}</Text><Text style={[styles.stockStatus, { color: statusColor, backgroundColor: `${statusColor}16` }]}>{statusLabel}</Text></View></View>;
+        }}
+        ListEmptyComponent={<View style={[styles.stockEmptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><AppIcon name="inventory" size={29} color={colors.muted} /><Text style={[styles.stockEmptyTitle, { color: colors.foreground }]}>Belum ada barang titipan</Text><Text style={[styles.stockEmptyText, { color: colors.muted }]}>Daftar barang dan status stok akan tampil setelah data titipan ditambahkan ke ruang kerja Anda.</Text></View>}
+      />
+    </View>
   );
 }
 
@@ -219,6 +277,41 @@ const styles = StyleSheet.create({
   managementCopy: { flex: 1, marginLeft: 11 },
   managementTitle: { fontSize: 14, fontWeight: "800" },
   managementText: { fontSize: 12, marginTop: 3 },
+  stockDashboard: { flex: 1, marginTop: 18 },
+  stockList: { flex: 1 },
+  stockListContent: { paddingBottom: 24, gap: 10 },
+  stockSectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  stockSectionCopy: { flex: 1, paddingRight: 12 },
+  stockSectionTitle: { fontSize: 18, fontWeight: "800" },
+  stockSectionSubtitle: { fontSize: 12, lineHeight: 17, marginTop: 3 },
+  stockRefreshButton: { width: 38, height: 38, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  summaryGrid: { flexDirection: "row", gap: 8 },
+  summaryCard: { flex: 1, minHeight: 72, borderWidth: 1, borderRadius: 15, padding: 11 },
+  summaryValue: { fontSize: 20, fontWeight: "800" },
+  summaryLabel: { fontSize: 10, marginTop: 3 },
+  statusLegend: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 11, marginBottom: 2 },
+  statusLegendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  statusLegendText: { fontSize: 10, fontWeight: "700" },
+  stockItemCard: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 17, padding: 12 },
+  stockItemIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  stockItemCopy: { flex: 1, marginLeft: 10, paddingRight: 8 },
+  stockItemName: { fontSize: 14, fontWeight: "800" },
+  stockItemSku: { fontSize: 10, marginTop: 3 },
+  stockItemUpdated: { fontSize: 9, marginTop: 4 },
+  stockItemRight: { alignItems: "flex-end", minWidth: 62 },
+  stockQuantity: { fontSize: 18, fontWeight: "800" },
+  stockUnit: { fontSize: 10, marginTop: -2 },
+  stockStatus: { fontSize: 10, fontWeight: "800", borderRadius: 7, paddingHorizontal: 7, paddingVertical: 4, marginTop: 6 },
+  stockEmptyCard: { borderWidth: 1, borderRadius: 17, padding: 22, alignItems: "center", marginTop: 2 },
+  stockEmptyTitle: { fontSize: 14, fontWeight: "800", marginTop: 10 },
+  stockEmptyText: { fontSize: 11, lineHeight: 17, textAlign: "center", marginTop: 5 },
+  stockLoading: { alignItems: "center", paddingVertical: 22 },
+  stockLoadingText: { fontSize: 12, marginTop: 8 },
+  stockErrorCard: { borderWidth: 1, borderRadius: 17, padding: 16, marginTop: 18 },
+  stockErrorText: { fontSize: 12, lineHeight: 18, marginTop: 7 },
+  stockRetryButton: { alignSelf: "flex-start", borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 12 },
+  stockRetryText: { fontSize: 12, fontWeight: "800" },
   pressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.65 },
 });
