@@ -1,14 +1,16 @@
 import { ScreenContainer } from "@/components/screen-container";
+import { MitraHppEditor } from "@/components/mitra-hpp-editor";
 import { AppIcon } from "@/components/ui/app-icon";
 import { useColors } from "@/hooks/use-colors";
 import { formatProductPrice, useMitraProducts } from "@/lib/mitra-products";
 import { saveMitraProductionBudget, type BudgetPeriod, useMitraProductionBudgets } from "@/lib/mitra-production-budgets";
+import { saveMitraProductionHpp, useMitraProductionHpps } from "@/lib/mitra-production-hpp";
 import { saveMitraProduction, updateMitraProductionResult, useMitraProductions, type MitraProduction, type ProductionStatus } from "@/lib/mitra-productions";
 import { useEffect, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 const PERIODS: BudgetPeriod[] = ["Hari", "Minggu", "Bulan"];
-type ProductionView = "list" | "budget" | "results";
+type ProductionView = "list" | "budget" | "results" | "hpp";
 
 function today() {
   const date = new Date();
@@ -23,11 +25,13 @@ export default function ProductionScreen() {
   const products = useMitraProducts();
   const productions = useMitraProductions();
   const budgets = useMitraProductionBudgets();
+  const hpps = useMitraProductionHpps();
   const [view, setView] = useState<ProductionView>("list");
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
   const [actualQuantity, setActualQuantity] = useState("");
   const [damagedQuantity, setDamagedQuantity] = useState("");
   const [resultNotes, setResultNotes] = useState("");
+  const [hppProductId, setHppProductId] = useState<string | null>(null);
   const [isProductionFormVisible, setProductionFormVisible] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [period, setPeriod] = useState<BudgetPeriod>("Bulan");
@@ -45,6 +49,7 @@ export default function ProductionScreen() {
   const budgetProduct = products.find((product) => product.id === budgetProductId) ?? null;
   const savedBudget = budgetProductId ? budgets.get(`${budgetProductId}:${budgetPeriod}`) : undefined;
   const selectedResult = productions.find((production) => production.id === selectedResultId) ?? null;
+  const selectedHppProduct = products.find((product) => product.id === hppProductId) ?? null;
 
   useEffect(() => {
     if (!budgetProductId) return;
@@ -97,6 +102,20 @@ export default function ProductionScreen() {
     setProductionFormVisible(false);
   };
 
+  const handleSaveHpp = (components: Parameters<typeof saveMitraProductionHpp>[0]["components"], outputQuantity: number) => {
+    if (!hppProductId) {
+      setError("Pilih produk terlebih dahulu.");
+      return;
+    }
+    if (!Number.isFinite(outputQuantity) || outputQuantity <= 0) {
+      setError("Masukkan jumlah hasil produksi yang lebih besar dari 0.");
+      return;
+    }
+    saveMitraProductionHpp({ productId: hppProductId, components, outputQuantity });
+    setError(null);
+    setSavedMessage("HPP berhasil disimpan untuk produk ini.");
+  };
+
   const handleSaveResult = () => {
     if (!selectedResult) {
       setError("Pilih produksi terlebih dahulu.");
@@ -134,7 +153,7 @@ export default function ProductionScreen() {
     setView(nextView);
     setError(null);
     setSavedMessage(null);
-    if (nextView !== "results") {
+    if (nextView !== "results" && nextView !== "hpp") {
       setSelectedResultId(null);
       setActualQuantity("");
       setDamagedQuantity("");
@@ -145,7 +164,7 @@ export default function ProductionScreen() {
   return (
     <ScreenContainer className="px-5">
       <FlatList<ReturnType<typeof useMitraProductions>[number] | ReturnType<typeof useMitraProducts>[number]>
-        data={view === "budget" ? products : productions}
+        data={view === "budget" || view === "hpp" ? products : productions}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
@@ -162,6 +181,7 @@ export default function ProductionScreen() {
             <View style={[styles.segment, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Pressable accessibilityRole="button" onPress={() => switchView("list")} style={[styles.segmentButton, view === "list" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "list" ? colors.background : colors.muted }]}>Daftar Produksi</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => switchView("results")} style={[styles.segmentButton, view === "results" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "results" ? colors.background : colors.muted }]}>Hasil Produksi</Text></Pressable>
+              <Pressable accessibilityRole="button" onPress={() => switchView("hpp")} style={[styles.segmentButton, view === "hpp" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "hpp" ? colors.background : colors.muted }]}>HPP Produksi</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => switchView("budget")} style={[styles.segmentButton, view === "budget" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "budget" ? colors.background : colors.muted }]}>Buat Anggaran</Text></Pressable>
             </View>
             {view === "list" ? (
@@ -173,12 +193,14 @@ export default function ProductionScreen() {
               </>
             ) : view === "budget" ? (
               <BudgetForm colors={colors} products={products} selectedProductId={budgetProductId} onSelectProduct={(id) => { setBudgetProductId(id); setError(null); }} period={budgetPeriod} onSelectPeriod={(value) => { setBudgetPeriod(value); setError(null); }} budgetValue={budgetValue} onBudgetChange={setBudgetValue} target={budgetTarget} onTargetChange={setBudgetTarget} onSave={handleSaveBudget} error={error} savedMessage={savedMessage} savedBudget={savedBudget} />
-            ) : (
+            ) : view === "results" ? (
               <ResultForm colors={colors} selectedProduction={selectedResult} actualQuantity={actualQuantity} onActualChange={setActualQuantity} damagedQuantity={damagedQuantity} onDamagedChange={setDamagedQuantity} resultNotes={resultNotes} onNotesChange={setResultNotes} onSave={handleSaveResult} error={error} savedMessage={savedMessage} />
+            ) : (
+              <MitraHppEditor colors={colors} product={selectedHppProduct} savedHpp={hppProductId ? hpps.get(hppProductId) : undefined} onSave={handleSaveHpp} error={error} message={savedMessage} />
             )}
           </View>
         }
-        renderItem={({ item }) => "productId" in item ? view === "results" ? <ProductionSelectOption production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} selected={item.id === selectedResultId} onSelect={() => { setSelectedResultId(item.id); setError(null); setSavedMessage(null); }} colors={colors} /> : <ProductionCard production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} colors={colors} /> : <BudgetProductOption product={item} selected={item.id === budgetProductId} onSelect={() => { setBudgetProductId(item.id); setError(null); }} colors={colors} />}
+        renderItem={({ item }) => "productId" in item ? view === "results" ? <ProductionSelectOption production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} selected={item.id === selectedResultId} onSelect={() => { setSelectedResultId(item.id); setError(null); setSavedMessage(null); }} colors={colors} /> : <ProductionCard production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} colors={colors} /> : <BudgetProductOption product={item} selected={view === "hpp" ? item.id === hppProductId : item.id === budgetProductId} onSelect={() => { if (view === "hpp") { setHppProductId(item.id); } else { setBudgetProductId(item.id); } setError(null); setSavedMessage(null); }} colors={colors} />}
         ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.muted }]}>{view === "list" ? "Belum ada produksi. Tekan Tambah Produksi untuk membuat rencana baru." : view === "results" ? "Belum ada produksi dari Daftar Produksi." : "Belum ada produk. Tambahkan produk dari menu Produk."}</Text>}
       />
     </ScreenContainer>
