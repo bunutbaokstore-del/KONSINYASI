@@ -1,3 +1,4 @@
+import { MitraDistribution } from "@/components/mitra-distribution";
 import { ScreenContainer } from "@/components/screen-container";
 import { AppIcon } from "@/components/ui/app-icon";
 import { addMitraProduct, formatProductPrice, type ProductStatus, useMitraProducts } from "@/lib/mitra-products";
@@ -22,6 +23,10 @@ export default function ProductsScreen() {
   const [sellingPrice, setSellingPrice] = useState("");
   const [status, setStatus] = useState<ProductStatus>("Aktif");
   const [error, setError] = useState<string | null>(null);
+
+  if (isMitra) {
+    return <ScreenContainer className="px-5"><View style={styles.distributionHeader}><View style={styles.headerCopy}><Text style={[styles.eyebrow, { color: colors.primary }]}>RUANG DISTRIBUSI</Text><Text style={[styles.title, { color: colors.foreground }]}>Distribusi</Text><Text style={[styles.subtitle, { color: colors.muted }]}>Ajukan supply dan pantau pengiriman produk dari Master Produk.</Text></View><View style={[styles.headerIcon, { backgroundColor: `${colors.primary}18` }]}><AppIcon name="shippingbox" size={25} color={colors.primary} /></View></View><MitraDistribution /></ScreenContainer>;
+  }
 
   const resetForm = () => {
     setName("");
@@ -152,6 +157,7 @@ function ChipRow({ values, selected, onSelect, colors }: { values: string[]; sel
 
 const styles = StyleSheet.create({
   listContent: { paddingTop: 14, paddingBottom: 28 },
+  distributionHeader: { flexDirection: "row", alignItems: "flex-start", paddingTop: 14 },
   headerRow: { flexDirection: "row", alignItems: "flex-start" },
   headerCopy: { flex: 1 },
   eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 7 },

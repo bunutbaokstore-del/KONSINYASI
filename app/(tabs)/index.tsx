@@ -178,16 +178,6 @@ export default function HomeScreen() {
         ) : null}
         {role === "mitra_umkm" ? <MitraProductionDashboard /> : null}
         {role === "mitra_umkm" ? <MitraStockDashboard /> : null}
-        {role === "mitra_umkm" ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Ajukan barang atau perubahan stok" onPress={() => router.push("/supplier-requests")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }, pressed && styles.pressed]}>
-            <AppIcon name="inventory" size={20} color={colors.primary} />
-            <View style={styles.managementCopy}>
-              <Text style={[styles.managementTitle, { color: colors.foreground }]}>Ajukan ke Admin</Text>
-              <Text style={[styles.managementText, { color: colors.muted }]}>Kirim barang atau perubahan stok untuk disetujui</Text>
-            </View>
-            <AppIcon name="chevron-right" size={20} color={colors.primary} />
-          </Pressable>
-        ) : null}
         {canManageUsers ? (
           <>
             <Pressable accessibilityRole="button" accessibilityLabel="Buka Manajemen Pengguna" onPress={() => router.push("/manage-users")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }, pressed && styles.pressed]}>
