@@ -14,6 +14,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -141,6 +142,7 @@ export default function HomeScreen() {
   const canManageUsers = role === "distributor" || role === "admin";
   return (
     <ScreenContainer className="px-6">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.homeScrollContent} nestedScrollEnabled>
       <View style={styles.homeContent}>
         <View style={styles.headerRow}>
           <View>
@@ -215,6 +217,7 @@ export default function HomeScreen() {
           </>
         ) : null}
       </View>
+      </ScrollView>
     </ScreenContainer>
   );
 }
@@ -245,6 +248,7 @@ function MitraStockDashboard() {
         data={items}
         keyExtractor={(item) => item.id}
         style={styles.stockList}
+        scrollEnabled={false}
         contentContainerStyle={styles.stockListContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={stockQuery.isRefetching} onRefresh={() => void stockQuery.refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
@@ -294,7 +298,8 @@ const styles = StyleSheet.create({
   legalText: { fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 14, maxWidth: 310 },
   errorText: { width: "100%", fontSize: 13, lineHeight: 19, textAlign: "center", marginTop: 12 },
   loadingText: { marginTop: 14, fontSize: 14 },
-  homeContent: { flex: 1, paddingTop: 14 },
+  homeScrollContent: { paddingBottom: 48 },
+  homeContent: { paddingTop: 14 },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, notificationButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center", position: "relative" }, notificationBadge: { position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#FFFFFF" }, notificationBadgeText: { fontSize: 9, lineHeight: 12, fontWeight: "900" },
   greeting: { fontSize: 27, lineHeight: 34, fontWeight: "800", letterSpacing: -0.4 },
   welcomeCard: { borderRadius: 24, padding: 22, marginTop: 28 },
