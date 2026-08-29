@@ -1,4 +1,5 @@
 import { ScreenContainer } from "@/components/screen-container";
+import { MitraProductionDashboard } from "@/components/mitra-production-dashboard";
 import { AppIcon } from "@/components/ui/app-icon";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
@@ -173,6 +174,7 @@ export default function HomeScreen() {
             <AppIcon name="chevron-right" size={20} color={colors.primary} />
           </Pressable>
         ) : null}
+        {role === "mitra_umkm" ? <MitraProductionDashboard /> : null}
         {role === "mitra_umkm" ? <MitraStockDashboard /> : null}
         {role === "mitra_umkm" ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Ajukan barang atau perubahan stok" onPress={() => router.push("/supplier-requests")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }, pressed && styles.pressed]}>
