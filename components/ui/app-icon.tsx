@@ -3,6 +3,7 @@ import Svg, { Circle, Path, Polyline, Rect } from "react-native-svg";
 export type AppIconName =
   | "inventory"
   | "shippingbox"
+  | "cart"
   | "building"
   | "wallet"
   | "verified-user"
@@ -44,6 +45,8 @@ export function AppIcon({ name, size = 24, color, strokeWidth = 2 }: AppIconProp
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M4 7.5 12 4l8 3.5v9L12 20l-8-3.5z" /><Path {...common} d="M4 7.5 12 11l8-3.5M12 11v9" /><Path {...common} d="M8.5 5.5 16 9" /></Svg>;
     case "shippingbox":
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M4 7.5 12 4l8 3.5v9L12 20l-8-3.5z" /><Path {...common} d="M4 7.5 12 11l8-3.5M12 11v9" /></Svg>;
+    case "cart":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M4 5h2l1.5 10.5h9.8L20 8H7" /><Circle {...common} cx="9" cy="19" r="1" /><Circle {...common} cx="17" cy="19" r="1" /></Svg>;
     case "building":
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M5 20V5.5L14 4v16M14 8h5v12M8 8h3M8 11h3M8 14h3M16 11h1M16 14h1M3.5 20h17" /></Svg>;
     case "wallet":

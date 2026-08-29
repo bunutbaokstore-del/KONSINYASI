@@ -4,6 +4,7 @@ import { OpaqueColorValue, type StyleProp, type TextStyle } from "react-native";
 const MAPPING = {
   "house.fill": "house",
   "shippingbox.fill": "shippingbox",
+  "cart.fill": "cart",
   "building.2.fill": "building",
   "wallet.bifold.fill": "wallet",
   "person.fill": "person",
