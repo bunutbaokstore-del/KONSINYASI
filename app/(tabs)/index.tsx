@@ -196,11 +196,11 @@ export default function HomeScreen() {
               </View>
               <AppIcon name="chevron-right" size={20} color={colors.primary} />
             </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel="Buka Persetujuan Supplier" onPress={() => router.push("/supplier-requests")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }, pressed && styles.pressed]}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Buka Persetujuan Supply" onPress={() => router.push("/supply-approval" as never) } style={({ pressed }) => [styles.managementButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }, pressed && styles.pressed]}>
               <AppIcon name="verified" size={20} color={colors.primary} />
               <View style={styles.managementCopy}>
-                <Text style={[styles.managementTitle, { color: colors.foreground }]}>Persetujuan Supplier</Text>
-                <Text style={[styles.managementText, { color: colors.muted }]}>Periksa pengajuan Mitra UMKM</Text>
+                <Text style={[styles.managementTitle, { color: colors.foreground }]}>Persetujuan Supply</Text>
+                <Text style={[styles.managementText, { color: colors.muted }]}>Setujui atau tolak pengajuan supply Mitra</Text>
               </View>
               <AppIcon name="chevron-right" size={20} color={colors.primary} />
             </Pressable>
