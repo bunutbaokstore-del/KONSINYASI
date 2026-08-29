@@ -18,8 +18,9 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.tint,
+        tabBarActiveTintColor: isMitra ? colors.primary : colors.tint,
         tabBarInactiveTintColor: colors.muted,
+        tabBarActiveBackgroundColor: isMitra ? `${colors.primary}14` : undefined,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
