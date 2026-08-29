@@ -2,6 +2,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { MitraHppEditor } from "@/components/mitra-hpp-editor";
 import { MitraProductionStock } from "@/components/mitra-production-stock";
 import { MitraProductShipment } from "@/components/mitra-product-shipment";
+import { MitraShipmentReceiving } from "@/components/mitra-shipment-receiving";
 import { MitraStockRecap } from "@/components/mitra-stock-recap";
 import { AppIcon } from "@/components/ui/app-icon";
 import { useColors } from "@/hooks/use-colors";
@@ -15,7 +16,7 @@ import { useEffect, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 const PERIODS: BudgetPeriod[] = ["Hari", "Minggu", "Bulan"];
-type ProductionView = "list" | "budget" | "results" | "hpp" | "history" | "stock" | "recap" | "shipment";
+type ProductionView = "list" | "budget" | "results" | "hpp" | "history" | "stock" | "recap" | "shipment" | "receiving";
 
 function today() {
   const date = new Date();
@@ -172,7 +173,7 @@ export default function ProductionScreen() {
   return (
     <ScreenContainer className="px-5">
       <FlatList<ReturnType<typeof useMitraProductions>[number] | ReturnType<typeof useMitraProducts>[number]>
-        data={view === "budget" || view === "hpp" ? products : view === "history" ? historyProductions : view === "stock" || view === "recap" || view === "shipment" ? [] : productions}
+        data={view === "budget" || view === "hpp" ? products : view === "history" ? historyProductions : view === "stock" || view === "recap" || view === "shipment" || view === "receiving" ? [] : productions}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
@@ -194,6 +195,7 @@ export default function ProductionScreen() {
               <Pressable accessibilityRole="button" onPress={() => switchView("stock")} style={[styles.segmentButton, view === "stock" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "stock" ? colors.background : colors.muted }]}>Stok Hasil</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => switchView("recap")} style={[styles.segmentButton, view === "recap" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "recap" ? colors.background : colors.muted }]}>Rekap Stok</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => switchView("shipment")} style={[styles.segmentButton, view === "shipment" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "shipment" ? colors.background : colors.muted }]}>Pengiriman</Text></Pressable>
+              <Pressable accessibilityRole="button" onPress={() => switchView("receiving")} style={[styles.segmentButton, view === "receiving" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "receiving" ? colors.background : colors.muted }]}>Penerimaan</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => switchView("budget")} style={[styles.segmentButton, view === "budget" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "budget" ? colors.background : colors.muted }]}>Buat Anggaran</Text></Pressable>
             </View>
             {view === "list" ? (
@@ -215,13 +217,15 @@ export default function ProductionScreen() {
               <MitraProductionStock />
             ) : view === "recap" ? (
               <MitraStockRecap />
-            ) : (
+            ) : view === "shipment" ? (
               <MitraProductShipment />
+            ) : (
+              <MitraShipmentReceiving />
             )}
           </View>
         }
         renderItem={({ item }) => "productId" in item ? view === "results" ? <ProductionSelectOption production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} selected={item.id === selectedResultId} onSelect={() => { setSelectedResultId(item.id); setError(null); setSavedMessage(null); }} colors={colors} /> : view === "history" ? <HistoryCard production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} hpp={getHistoryHpp(hpps, item.productId)} colors={colors} /> : <ProductionCard production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} colors={colors} /> : <BudgetProductOption product={item} selected={view === "hpp" ? item.id === hppProductId : item.id === budgetProductId} onSelect={() => { if (view === "hpp") { setHppProductId(item.id); } else { setBudgetProductId(item.id); } setError(null); setSavedMessage(null); }} colors={colors} />}
-        ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.muted }]}>{view === "list" ? "Belum ada produksi. Tekan Tambah Produksi untuk membuat rencana baru." : view === "results" ? "Belum ada produksi dari Daftar Produksi." : view === "history" ? "Belum ada riwayat sesuai filter." : view === "stock" || view === "recap" ? "Belum ada stok hasil produksi." : view === "shipment" ? "Belum ada pengiriman." : "Belum ada produk. Tambahkan produk dari menu Produk."}</Text>}
+        ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.muted }]}>{view === "list" ? "Belum ada produksi. Tekan Tambah Produksi untuk membuat rencana baru." : view === "results" ? "Belum ada produksi dari Daftar Produksi." : view === "history" ? "Belum ada riwayat sesuai filter." : view === "stock" || view === "recap" ? "Belum ada stok hasil produksi." : view === "shipment" ? "Belum ada pengiriman." : view === "receiving" ? "Belum ada penerimaan." : "Belum ada produk. Tambahkan produk dari menu Produk."}</Text>}
       />
     </ScreenContainer>
   );

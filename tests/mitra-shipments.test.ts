@@ -21,6 +21,8 @@ describe("Mitra shipments", () => {
   it("rejects shipments above available stock and supports Diterima", () => {
     expect(() => saveMitraShipment({ distributorName: "Distributor Lokal", productId: "kopi", quantity: 101, shipmentDate: "2026-08-29", notes: "" }, products, productions)).toThrow("melebihi stok tersedia");
     const planned = saveMitraShipment({ distributorName: "Distributor Lokal", productId: "kopi", quantity: 10, shipmentDate: "2026-08-29", notes: "" }, products, productions);
-    expect(updateMitraShipmentStatus(planned.id, "Diterima", products, productions)?.status).toBe("Diterima");
+    expect(() => updateMitraShipmentStatus(planned.id, "Diterima", products, productions)).toThrow("Hanya pengiriman berstatus Dikirim");
+    expect(updateMitraShipmentStatus(planned.id, "Dikirim", products, productions)?.status).toBe("Dikirim");
+    expect(updateMitraShipmentStatus(planned.id, "Diterima", products, productions, { receivedDate: "2026-08-30", receivedNotes: "Diterima lengkap" })).toMatchObject({ status: "Diterima", receivedDate: "2026-08-30", receivedNotes: "Diterima lengkap" });
   });
 });
