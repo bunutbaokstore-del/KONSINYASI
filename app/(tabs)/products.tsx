@@ -1,6 +1,7 @@
 import { ScreenContainer } from "@/components/screen-container";
 import { AppIcon } from "@/components/ui/app-icon";
 import { addMitraProduct, formatProductPrice, type ProductStatus, useMitraProducts } from "@/lib/mitra-products";
+import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -10,6 +11,8 @@ const UNITS = ["Pcs", "Gram", "Kilogram", "Pouch"];
 
 export default function ProductsScreen() {
   const colors = useColors();
+  const { user } = useAuth();
+  const isMitra = user?.role === "mitra_umkm";
   const products = useMitraProducts();
   const [isFormVisible, setFormVisible] = useState(false);
   const [name, setName] = useState("");
@@ -31,6 +34,7 @@ export default function ProductsScreen() {
   };
 
   const handleSave = () => {
+    if (isMitra) return;
     const parsedPrice = Number(sellingPrice.replace(/[^0-9]/g, ""));
     if (!name.trim() || !size.trim() || !sellingPrice.trim() || !Number.isFinite(parsedPrice) || parsedPrice <= 0) {
       setError("Lengkapi data produk dan masukkan harga jual yang valid.");
@@ -62,25 +66,27 @@ export default function ProductsScreen() {
               <View style={styles.headerCopy}>
                 <Text style={[styles.eyebrow, { color: colors.primary }]}>MASTER DATA MITRA</Text>
                 <Text style={[styles.title, { color: colors.foreground }]}>Produk</Text>
-                <Text style={[styles.subtitle, { color: colors.muted }]}>Kelola produk yang menjadi sumber data Produksi dan HPP.</Text>
+                <Text style={[styles.subtitle, { color: colors.muted }]}>{isMitra ? "Lihat produk yang tersedia untuk Produksi dan HPP." : "Kelola produk yang menjadi sumber data Produksi dan HPP."}</Text>
               </View>
               <View style={[styles.headerIcon, { backgroundColor: `${colors.primary}18` }]}>
                 <AppIcon name="shippingbox" size={25} color={colors.primary} />
               </View>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={isFormVisible ? "Tutup form tambah produk" : "Tambah produk baru"}
-              onPress={() => {
-                setFormVisible((visible) => !visible);
-                setError(null);
-              }}
-              style={({ pressed }) => [styles.addButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
-            >
-              <AppIcon name={isFormVisible ? "close" : "add"} size={20} color={colors.background} />
-              <Text style={[styles.addButtonText, { color: colors.background }]}>{isFormVisible ? "Tutup Form" : "Tambah Produk"}</Text>
-            </Pressable>
-            {isFormVisible ? (
+            {!isMitra ? (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={isFormVisible ? "Tutup form tambah produk" : "Tambah produk baru"}
+                  onPress={() => {
+                    setFormVisible((visible) => !visible);
+                    setError(null);
+                  }}
+                  style={({ pressed }) => [styles.addButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
+                >
+                  <AppIcon name={isFormVisible ? "close" : "add"} size={20} color={colors.background} />
+                  <Text style={[styles.addButtonText, { color: colors.background }]}>{isFormVisible ? "Tutup Form" : "Tambah Produk"}</Text>
+                </Pressable>
+                {isFormVisible ? (
               <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Text style={[styles.formTitle, { color: colors.foreground }]}>Tambah Produk</Text>
                 <FieldLabel text="Nama Produk" colors={colors} />
@@ -100,6 +106,8 @@ export default function ProductsScreen() {
                   <Text style={[styles.saveButtonText, { color: colors.background }]}>Simpan Produk</Text>
                 </Pressable>
               </View>
+                ) : null}
+              </>
             ) : null}
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Daftar Produk</Text>
