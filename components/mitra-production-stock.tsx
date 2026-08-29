@@ -1,6 +1,7 @@
 import { useColors } from "@/hooks/use-colors";
 import { getMitraProductionStockSummary } from "@/lib/mitra-production-stock";
 import { useMitraProductions } from "@/lib/mitra-productions";
+import { useMitraShipments } from "@/lib/mitra-shipments";
 import { useMitraProducts } from "@/lib/mitra-products";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -8,7 +9,8 @@ export function MitraProductionStock() {
   const colors = useColors();
   const products = useMitraProducts();
   const productions = useMitraProductions();
-  const stockSummaries = getMitraProductionStockSummary(products, productions);
+  const shipments = useMitraShipments();
+  const stockSummaries = getMitraProductionStockSummary(products, productions, shipments);
   const totalAvailable = stockSummaries.reduce((sum, summary) => sum + summary.availableStock, 0);
 
   return <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.title, { color: colors.foreground }]}>Stok Hasil Produksi</Text><Text style={[styles.helper, { color: colors.muted }]}>Hanya Hasil Aktual dari produksi berstatus Selesai yang masuk stok.</Text><View style={[styles.totalCard, { backgroundColor: `${colors.primary}12` }]}><Text style={[styles.totalLabel, { color: colors.muted }]}>Total Stok Tersedia</Text><Text style={[styles.totalValue, { color: colors.primary }]}>{totalAvailable} unit</Text></View>{stockSummaries.length ? stockSummaries.map((summary) => <View key={summary.productId} style={[styles.productCard, { borderTopColor: colors.border }]}><View style={styles.productHeader}><View style={styles.productCopy}><Text style={[styles.productName, { color: colors.foreground }]}>{summary.productName}</Text><Text style={[styles.productMeta, { color: colors.muted }]}>Produk dari Master Produk</Text></View><Text style={[styles.available, { color: colors.primary }]}>{summary.availableStock} unit</Text></View><View style={styles.detailRow}><StockDetail label="Stok Masuk" value={`${summary.stockIn} unit`} colors={colors} /><StockDetail label="Stok Tersedia" value={`${summary.availableStock} unit`} colors={colors} /></View><Text style={[styles.historyTitle, { color: colors.foreground }]}>Riwayat Stok</Text>{summary.history.map((production) => <View key={production.id} style={[styles.historyRow, { borderTopColor: colors.border }]}><Text style={[styles.historyDate, { color: colors.muted }]}>{production.productionDate}</Text><Text style={[styles.historyValue, { color: colors.foreground }]}>+{production.actualQuantity ?? 0} unit</Text></View>)}</View>) : <Text style={[styles.empty, { color: colors.muted }]}>Belum ada Hasil Produksi selesai yang dapat masuk stok.</Text>}</View>;

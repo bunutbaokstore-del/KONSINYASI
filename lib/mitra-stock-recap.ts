@@ -3,12 +3,13 @@ import type { MitraProductionHpp } from "./mitra-production-hpp";
 import type { MitraProduction } from "./mitra-productions";
 import type { BudgetPeriod } from "./mitra-production-budgets";
 import type { MitraProduct } from "./mitra-products";
+import type { MitraShipment } from "./mitra-shipments";
 
 export type StockRecapFilter = { productId?: string; period?: BudgetPeriod };
 export type StockRecap = { totalCompleted: number; totalActual: number; stockIn: number; stockAvailable: number; stockValue: number; rows: Array<{ product: MitraProduct; totalCompleted: number; totalActual: number; stockIn: number; stockAvailable: number; stockValue: number; hppPerUnit: number }> };
 
-export function getMitraStockRecap(products: MitraProduct[], productions: MitraProduction[], hpps: Map<string, MitraProductionHpp>, filter: StockRecapFilter = {}): StockRecap {
-  const rows = getMitraProductionStock(products, productions).filter((stock) => !filter.productId || stock.productId === filter.productId).map((stock) => {
+export function getMitraStockRecap(products: MitraProduct[], productions: MitraProduction[], hpps: Map<string, MitraProductionHpp>, filter: StockRecapFilter = {}, shipments: MitraShipment[] = []): StockRecap {
+  const rows = getMitraProductionStock(products, productions, shipments).filter((stock) => !filter.productId || stock.productId === filter.productId).map((stock) => {
     const product = products.find((item) => item.id === stock.productId);
     if (!product) return null;
     const history = stock.history.filter((production) => !filter.period || production.budgetPeriod === filter.period);
