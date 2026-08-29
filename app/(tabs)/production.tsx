@@ -110,6 +110,7 @@ export default function ProductionScreen() {
     setError(null);
     setSavedMessage("Produksi berhasil disimpan ke Daftar Produksi.");
     setProductionFormVisible(false);
+    switchView("list");
   };
 
   const handleSaveHpp = (components: Parameters<typeof saveMitraProductionHpp>[0]["components"], outputQuantity: number) => {
@@ -124,6 +125,7 @@ export default function ProductionScreen() {
     saveMitraProductionHpp({ productId: hppProductId, components, outputQuantity });
     setError(null);
     setSavedMessage("HPP berhasil disimpan untuk produk ini.");
+    switchView("list");
   };
 
   const handleSaveResult = () => {
@@ -141,6 +143,7 @@ export default function ProductionScreen() {
     updateMitraProductionResult({ id: selectedResult.id, actualQuantity: actual, damagedQuantity: damaged, yieldPercentage: percentage, resultNotes: resultNotes.trim() });
     setError(null);
     setSavedMessage("Hasil produksi tersimpan dan status berubah menjadi Selesai.");
+    switchView("list");
   };
 
   const handleSaveBudget = () => {
@@ -157,6 +160,7 @@ export default function ProductionScreen() {
     saveMitraProductionBudget({ productId: budgetProductId, period: budgetPeriod, productionBudget: budget, productionTarget: target });
     setError(null);
     setSavedMessage("Pengaturan berhasil disimpan dan siap digunakan untuk Tambah Produksi.");
+    switchView("list");
   };
 
   const switchView = (nextView: ProductionView) => {
@@ -221,9 +225,9 @@ export default function ProductionScreen() {
             ) : view === "recap" ? (
               <MitraStockRecap />
             ) : view === "shipment" ? (
-              <MitraProductShipment />
+              <MitraProductShipment onSaved={() => switchView("list")} />
             ) : (
-              <MitraShipmentReceiving />
+              <MitraShipmentReceiving onSaved={() => switchView("list")} />
             )}
           </View>
         }
