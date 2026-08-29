@@ -203,8 +203,6 @@ export default function ProductionScreen() {
               <Pressable accessibilityRole="button" onPress={() => switchView("history")} style={[styles.segmentButton, view === "history" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "history" ? colors.background : colors.muted }]}>Riwayat</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => switchView("stock")} style={[styles.segmentButton, view === "stock" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "stock" ? colors.background : colors.muted }]}>Stok Hasil</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => switchView("recap")} style={[styles.segmentButton, view === "recap" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "recap" ? colors.background : colors.muted }]}>Rekap Stok</Text></Pressable>
-              <Pressable accessibilityRole="button" onPress={() => switchView("shipment")} style={[styles.segmentButton, view === "shipment" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "shipment" ? colors.background : colors.muted }]}>Pengiriman</Text></Pressable>
-              <Pressable accessibilityRole="button" onPress={() => switchView("receiving")} style={[styles.segmentButton, view === "receiving" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "receiving" ? colors.background : colors.muted }]}>Penerimaan</Text></Pressable>
             </View>
             </ScrollView>
             {view === "list" ? (
