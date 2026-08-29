@@ -2,6 +2,9 @@ import Svg, { Circle, Path, Polyline, Rect } from "react-native-svg";
 
 export type AppIconName =
   | "inventory"
+  | "shippingbox"
+  | "building"
+  | "wallet"
   | "verified-user"
   | "logout"
   | "handshake"
@@ -39,6 +42,12 @@ export function AppIcon({ name, size = 24, color, strokeWidth = 2 }: AppIconProp
   switch (name) {
     case "inventory":
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M4 7.5 12 4l8 3.5v9L12 20l-8-3.5z" /><Path {...common} d="M4 7.5 12 11l8-3.5M12 11v9" /><Path {...common} d="M8.5 5.5 16 9" /></Svg>;
+    case "shippingbox":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M4 7.5 12 4l8 3.5v9L12 20l-8-3.5z" /><Path {...common} d="M4 7.5 12 11l8-3.5M12 11v9" /></Svg>;
+    case "building":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M5 20V5.5L14 4v16M14 8h5v12M8 8h3M8 11h3M8 14h3M16 11h1M16 14h1M3.5 20h17" /></Svg>;
+    case "wallet":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M4 7.5A2.5 2.5 0 0 1 6.5 5H19a1 1 0 0 1 1 1v13H6.5A2.5 2.5 0 0 1 4 16.5z" /><Path {...common} d="M4 8h14.5A1.5 1.5 0 0 1 20 9.5V15h-4a2.5 2.5 0 0 1 0-5h4M16 12.5h.01" /></Svg>;
     case "verified-user":
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M12 3.5 19 6v5.4c0 4.3-2.9 7.8-7 9.1-4.1-1.3-7-4.8-7-9.1V6z" /><Polyline {...common} points="8.5,12 10.8,14.3 15.7,9.6" /></Svg>;
     case "logout":
