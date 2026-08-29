@@ -3,12 +3,12 @@ import { AppIcon } from "@/components/ui/app-icon";
 import { useColors } from "@/hooks/use-colors";
 import { formatProductPrice, useMitraProducts } from "@/lib/mitra-products";
 import { saveMitraProductionBudget, type BudgetPeriod, useMitraProductionBudgets } from "@/lib/mitra-production-budgets";
-import { saveMitraProduction, useMitraProductions, type ProductionStatus } from "@/lib/mitra-productions";
+import { saveMitraProduction, updateMitraProductionResult, useMitraProductions, type MitraProduction, type ProductionStatus } from "@/lib/mitra-productions";
 import { useEffect, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 const PERIODS: BudgetPeriod[] = ["Hari", "Minggu", "Bulan"];
-type ProductionView = "list" | "budget";
+type ProductionView = "list" | "budget" | "results";
 
 function today() {
   const date = new Date();
@@ -24,6 +24,10 @@ export default function ProductionScreen() {
   const productions = useMitraProductions();
   const budgets = useMitraProductionBudgets();
   const [view, setView] = useState<ProductionView>("list");
+  const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
+  const [actualQuantity, setActualQuantity] = useState("");
+  const [damagedQuantity, setDamagedQuantity] = useState("");
+  const [resultNotes, setResultNotes] = useState("");
   const [isProductionFormVisible, setProductionFormVisible] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [period, setPeriod] = useState<BudgetPeriod>("Bulan");
@@ -40,6 +44,7 @@ export default function ProductionScreen() {
   const budgetForProduction = selectedProductId ? budgets.get(`${selectedProductId}:${period}`) : undefined;
   const budgetProduct = products.find((product) => product.id === budgetProductId) ?? null;
   const savedBudget = budgetProductId ? budgets.get(`${budgetProductId}:${budgetPeriod}`) : undefined;
+  const selectedResult = productions.find((production) => production.id === selectedResultId) ?? null;
 
   useEffect(() => {
     if (!budgetProductId) return;
@@ -49,11 +54,25 @@ export default function ProductionScreen() {
     setSavedMessage(saved ? "Pengaturan tersimpan dimuat kembali." : null);
   }, [budgetPeriod, budgetProductId, budgets]);
 
+  useEffect(() => {
+    if (!selectedResult) return;
+    setActualQuantity(selectedResult.actualQuantity === null ? "" : String(selectedResult.actualQuantity));
+    setDamagedQuantity(selectedResult.damagedQuantity === null ? "" : String(selectedResult.damagedQuantity));
+    setResultNotes(selectedResult.resultNotes);
+  }, [selectedResult]);
+
   const selectProductionProduct = (productId: string) => {
     setSelectedProductId(productId);
     setError(null);
     setSavedMessage(null);
   };
+
+  useEffect(() => {
+    if (!selectedResult) return;
+    setActualQuantity(selectedResult.actualQuantity === null ? "" : String(selectedResult.actualQuantity));
+    setDamagedQuantity(selectedResult.damagedQuantity === null ? "" : String(selectedResult.damagedQuantity));
+    setResultNotes(selectedResult.resultNotes);
+  }, [selectedResult]);
 
   const handleSaveProduction = () => {
     if (!selectedProductId) {
@@ -78,6 +97,23 @@ export default function ProductionScreen() {
     setProductionFormVisible(false);
   };
 
+  const handleSaveResult = () => {
+    if (!selectedResult) {
+      setError("Pilih produksi terlebih dahulu.");
+      return;
+    }
+    const actual = Number(actualQuantity.replace(/[^0-9]/g, ""));
+    const damaged = damagedQuantity.trim() ? Number(damagedQuantity.replace(/[^0-9]/g, "")) : 0;
+    if (!actualQuantity.trim() || !Number.isFinite(actual) || actual <= 0 || !Number.isFinite(damaged) || damaged < 0) {
+      setError("Masukkan hasil aktual dan rusak/susut yang valid.");
+      return;
+    }
+    const percentage = selectedResult.targetQuantity > 0 ? Number(((actual / selectedResult.targetQuantity) * 100).toFixed(2)) : 0;
+    updateMitraProductionResult({ id: selectedResult.id, actualQuantity: actual, damagedQuantity: damaged, yieldPercentage: percentage, resultNotes: resultNotes.trim() });
+    setError(null);
+    setSavedMessage("Hasil produksi tersimpan dan status berubah menjadi Selesai.");
+  };
+
   const handleSaveBudget = () => {
     if (!budgetProductId) {
       setError("Pilih produk terlebih dahulu.");
@@ -98,12 +134,18 @@ export default function ProductionScreen() {
     setView(nextView);
     setError(null);
     setSavedMessage(null);
+    if (nextView !== "results") {
+      setSelectedResultId(null);
+      setActualQuantity("");
+      setDamagedQuantity("");
+      setResultNotes("");
+    }
   };
 
   return (
     <ScreenContainer className="px-5">
       <FlatList<ReturnType<typeof useMitraProductions>[number] | ReturnType<typeof useMitraProducts>[number]>
-        data={view === "list" ? productions : products}
+        data={view === "budget" ? products : productions}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
@@ -119,6 +161,7 @@ export default function ProductionScreen() {
             </View>
             <View style={[styles.segment, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Pressable accessibilityRole="button" onPress={() => switchView("list")} style={[styles.segmentButton, view === "list" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "list" ? colors.background : colors.muted }]}>Daftar Produksi</Text></Pressable>
+              <Pressable accessibilityRole="button" onPress={() => switchView("results")} style={[styles.segmentButton, view === "results" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "results" ? colors.background : colors.muted }]}>Hasil Produksi</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => switchView("budget")} style={[styles.segmentButton, view === "budget" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "budget" ? colors.background : colors.muted }]}>Buat Anggaran</Text></Pressable>
             </View>
             {view === "list" ? (
@@ -128,19 +171,53 @@ export default function ProductionScreen() {
                 {savedMessage ? <Message text={savedMessage} colors={colors} /> : null}
                 <View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Daftar Produksi</Text><Text style={[styles.countText, { color: colors.muted }]}>{productions.length} produksi</Text></View>
               </>
-            ) : (
+            ) : view === "budget" ? (
               <BudgetForm colors={colors} products={products} selectedProductId={budgetProductId} onSelectProduct={(id) => { setBudgetProductId(id); setError(null); }} period={budgetPeriod} onSelectPeriod={(value) => { setBudgetPeriod(value); setError(null); }} budgetValue={budgetValue} onBudgetChange={setBudgetValue} target={budgetTarget} onTargetChange={setBudgetTarget} onSave={handleSaveBudget} error={error} savedMessage={savedMessage} savedBudget={savedBudget} />
+            ) : (
+              <ResultForm colors={colors} selectedProduction={selectedResult} actualQuantity={actualQuantity} onActualChange={setActualQuantity} damagedQuantity={damagedQuantity} onDamagedChange={setDamagedQuantity} resultNotes={resultNotes} onNotesChange={setResultNotes} onSave={handleSaveResult} error={error} savedMessage={savedMessage} />
             )}
           </View>
         }
-        renderItem={({ item }) => "productId" in item ? <ProductionCard production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} colors={colors} /> : <BudgetProductOption product={item} selected={item.id === budgetProductId} onSelect={() => { setBudgetProductId(item.id); setError(null); }} colors={colors} />}
-        ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.muted }]}>{view === "list" ? "Belum ada produksi. Tekan Tambah Produksi untuk membuat rencana baru." : "Belum ada produk. Tambahkan produk dari menu Produk."}</Text>}
+        renderItem={({ item }) => "productId" in item ? view === "results" ? <ProductionSelectOption production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} selected={item.id === selectedResultId} onSelect={() => { setSelectedResultId(item.id); setError(null); setSavedMessage(null); }} colors={colors} /> : <ProductionCard production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} colors={colors} /> : <BudgetProductOption product={item} selected={item.id === budgetProductId} onSelect={() => { setBudgetProductId(item.id); setError(null); }} colors={colors} />}
+        ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.muted }]}>{view === "list" ? "Belum ada produksi. Tekan Tambah Produksi untuk membuat rencana baru." : view === "results" ? "Belum ada produksi dari Daftar Produksi." : "Belum ada produk. Tambahkan produk dari menu Produk."}</Text>}
       />
     </ScreenContainer>
   );
 }
 
 type Colors = ReturnType<typeof useColors>;
+
+function ResultForm({ colors, selectedProduction, actualQuantity, onActualChange, damagedQuantity, onDamagedChange, resultNotes, onNotesChange, onSave, error, savedMessage }: { colors: Colors; selectedProduction: MitraProduction | null; actualQuantity: string; onActualChange: (value: string) => void; damagedQuantity: string; onDamagedChange: (value: string) => void; resultNotes: string; onNotesChange: (value: string) => void; onSave: () => void; error: string | null; savedMessage: string | null }) {
+  const productLabel = selectedProduction ? "Produk terpilih dari Daftar Produksi" : "Pilih produksi dari daftar di bawah";
+  return <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <Text style={[styles.formTitle, { color: colors.foreground }]}>Hasil Produksi</Text>
+    <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Pilih Produksi</Text>
+    <Text style={[styles.helper, { color: colors.muted }]}>{productLabel}</Text>
+    {selectedProduction ? <View style={[styles.selectedCard, { borderColor: colors.primary, backgroundColor: `${colors.primary}12` }]}><View style={styles.selectedCopy}><Text style={[styles.selectedLabel, { color: colors.primary }]}>PRODUKSI TERPILIH</Text><Text style={[styles.selectedName, { color: colors.foreground }]}>{selectedProduction.productionDate}</Text><Text style={[styles.selectedMeta, { color: colors.muted }]}>Target {selectedProduction.targetQuantity} unit · {selectedProduction.budgetPeriod}</Text></View><AppIcon name="verified" size={22} color={colors.primary} /></View> : <Text style={[styles.emptySelection, { color: colors.muted }]}>Belum ada produksi dipilih.</Text>}
+    <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Tanggal Produksi</Text>
+    <View style={[styles.readOnlyInput, { backgroundColor: `${colors.primary}10`, borderColor: colors.border }]}><Text style={[styles.readOnlyText, { color: selectedProduction ? colors.foreground : colors.muted }]}>{selectedProduction?.productionDate ?? "Pilih produksi terlebih dahulu"}</Text></View>
+    <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Target Produksi</Text>
+    <View style={[styles.readOnlyInput, { backgroundColor: `${colors.primary}10`, borderColor: colors.border }]}><Text style={[styles.readOnlyText, { color: selectedProduction ? colors.primary : colors.muted }]}>{selectedProduction ? `${selectedProduction.targetQuantity} unit` : "Target dari Daftar Produksi"}</Text></View>
+    <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Jumlah Produksi</Text>
+    <View style={[styles.readOnlyInput, { backgroundColor: colors.background, borderColor: colors.border }]}><Text style={[styles.readOnlyText, { color: selectedProduction ? colors.foreground : colors.muted }]}>{selectedProduction ? `${selectedProduction.actualQuantity ?? "-"} unit` : "Belum tersedia"}</Text></View>
+    <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Hasil Aktual</Text>
+    <TextInput value={actualQuantity} onChangeText={onActualChange} placeholder="Masukkan hasil aktual" placeholderTextColor={colors.muted} keyboardType="numeric" style={[styles.input, { color: colors.foreground, borderColor: colors.border }]} />
+    <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Rusak / Susut</Text>
+    <TextInput value={damagedQuantity} onChangeText={onDamagedChange} placeholder="Masukkan jumlah rusak/susut (opsional)" placeholderTextColor={colors.muted} keyboardType="numeric" style={[styles.input, { color: colors.foreground, borderColor: colors.border }]} />
+    <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Persentase Hasil</Text>
+    <View style={[styles.readOnlyInput, { backgroundColor: `${colors.success}12`, borderColor: colors.border }]}><Text style={[styles.readOnlyText, { color: colors.success }]}>{selectedProduction && actualQuantity ? `${((Number(actualQuantity.replace(/[^0-9]/g, "")) / selectedProduction.targetQuantity) * 100).toFixed(2)}% dari target` : "Terhitung setelah hasil aktual diisi"}</Text></View>
+    <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Catatan Hasil <Text style={{ fontWeight: "500", color: colors.muted }}>(opsional)</Text></Text>
+    <TextInput value={resultNotes} onChangeText={onNotesChange} placeholder="Tambahkan catatan hasil" placeholderTextColor={colors.muted} multiline style={[styles.input, styles.notesInput, { color: colors.foreground, borderColor: colors.border }]} />
+    {error ? <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text> : null}
+    <Pressable accessibilityRole="button" onPress={onSave} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><AppIcon name="verified" size={18} color={colors.background} /><Text style={[styles.saveText, { color: colors.background }]}>Simpan Hasil</Text></Pressable>
+    {savedMessage ? <Message text={savedMessage} colors={colors} /> : null}
+  </View>;
+}
+
+function ProductionSelectOption({ production, productName, selected, onSelect, colors }: { production: MitraProduction; productName: string; selected: boolean; onSelect: () => void; colors: Colors }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Pilih produksi ${productName} tanggal ${production.productionDate}`} onPress={onSelect} style={({ pressed }) => [styles.productOption, { backgroundColor: colors.surface, borderColor: selected ? colors.primary : colors.border }, pressed && styles.pressed]}><View style={[styles.productIcon, { backgroundColor: `${colors.primary}18` }]}><AppIcon name="building" size={20} color={colors.primary} /></View><View style={styles.productCopy}><Text style={[styles.productName, { color: colors.foreground }]}>{productName}</Text><Text style={[styles.productMeta, { color: colors.muted }]}>{production.productionDate} · target {production.targetQuantity} unit · {production.budgetPeriod}</Text></View><View style={[styles.statusBadge, { backgroundColor: production.status === "Selesai" ? `${colors.success}18` : `${colors.warning}18` }]}><Text style={[styles.statusText, { color: production.status === "Selesai" ? colors.success : colors.warning }]}>{production.status}</Text></View></Pressable>;
+}
+
 
 function ProductionForm({ colors, products, selectedProductId, onSelectProduct, period, onSelectPeriod, productionDate, onDateChange, productionQuantity, onQuantityChange, notes, onNotesChange, target, onSave, error }: { colors: Colors; products: ReturnType<typeof useMitraProducts>; selectedProductId: string | null; onSelectProduct: (id: string) => void; period: BudgetPeriod; onSelectPeriod: (period: BudgetPeriod) => void; productionDate: string; onDateChange: (value: string) => void; productionQuantity: string; onQuantityChange: (value: string) => void; notes: string; onNotesChange: (value: string) => void; target: number | null; onSave: () => void; error: string | null }) {
   return <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -205,5 +282,5 @@ function Message({ text, colors }: { text: string; colors: Colors }) {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingTop: 14, paddingBottom: 28 }, headerRow: { flexDirection: "row", alignItems: "flex-start" }, headerCopy: { flex: 1 }, eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 7 }, title: { fontSize: 30, lineHeight: 37, fontWeight: "800", letterSpacing: -0.6 }, subtitle: { fontSize: 13, lineHeight: 19, marginTop: 8, paddingRight: 12 }, headerIcon: { width: 50, height: 50, borderRadius: 16, alignItems: "center", justifyContent: "center", marginTop: 2 }, segment: { flexDirection: "row", borderWidth: 1, borderRadius: 13, padding: 3, marginTop: 20 }, segmentButton: { flex: 1, alignItems: "center", borderRadius: 10, paddingVertical: 10 }, segmentText: { fontSize: 12, fontWeight: "800" }, primaryAction: { minHeight: 48, borderRadius: 14, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", marginTop: 14 }, primaryActionText: { fontSize: 14, fontWeight: "800" }, formCard: { borderWidth: 1, borderRadius: 19, padding: 15, marginTop: 14 }, formTitle: { fontSize: 18, fontWeight: "800" }, fieldLabel: { fontSize: 12, fontWeight: "800", marginTop: 16, marginBottom: 7 }, helper: { fontSize: 12, lineHeight: 18 }, optionList: { gap: 8, marginTop: 12 }, input: { minHeight: 46, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, fontSize: 14 }, notesInput: { minHeight: 76, paddingTop: 12, textAlignVertical: "top" }, readOnlyInput: { minHeight: 46, borderWidth: 1, borderRadius: 12, justifyContent: "center", paddingHorizontal: 12 }, readOnlyText: { fontSize: 13, fontWeight: "700" }, chipRow: { flexDirection: "row", gap: 8 }, chip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9 }, chipText: { fontSize: 12, fontWeight: "700" }, errorText: { fontSize: 12, lineHeight: 18, marginTop: 12 }, saveButton: { minHeight: 47, borderRadius: 13, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", marginTop: 17 }, saveText: { fontSize: 14, fontWeight: "800" }, savedNote: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: 11, padding: 10, marginTop: 12 }, savedText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: "700" }, readback: { fontSize: 11, lineHeight: 17, marginTop: 10 }, listLabel: { fontSize: 12, fontWeight: "800", marginTop: 18 }, sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 25, marginBottom: 11 }, sectionTitle: { fontSize: 18, fontWeight: "800" }, countText: { fontSize: 12, fontWeight: "700" }, productOption: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 15, padding: 12 }, compactProductOption: { padding: 10 }, productIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center" }, compactProductIcon: { width: 36, height: 36, borderRadius: 11 }, productCopy: { flex: 1, marginLeft: 11 }, productName: { fontSize: 14, fontWeight: "800" }, compactProductName: { fontSize: 13 }, productMeta: { fontSize: 11, marginTop: 4 }, productionCard: { borderWidth: 1, borderRadius: 17, padding: 14, marginBottom: 10 }, productionTop: { flexDirection: "row", alignItems: "flex-start" }, productionTitleCopy: { flex: 1, paddingRight: 8 }, productionName: { fontSize: 16, fontWeight: "800" }, productionDate: { fontSize: 11, marginTop: 5 }, statusBadge: { borderRadius: 9, paddingHorizontal: 8, paddingVertical: 6 }, statusText: { fontSize: 10, fontWeight: "800" }, detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 15 }, detail: { width: "47%", paddingTop: 9, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#DCE5DF" }, detailLabel: { fontSize: 10 }, detailValue: { fontSize: 13, fontWeight: "800", marginTop: 3 }, notes: { fontSize: 11, lineHeight: 17, marginTop: 12, fontStyle: "italic" }, emptyText: { textAlign: "center", fontSize: 13, lineHeight: 20, paddingVertical: 28 }, pressed: { opacity: 0.78 },
+  content: { paddingTop: 14, paddingBottom: 28 }, headerRow: { flexDirection: "row", alignItems: "flex-start" }, headerCopy: { flex: 1 }, eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.5, marginBottom: 7 }, title: { fontSize: 30, lineHeight: 37, fontWeight: "800", letterSpacing: -0.6 }, subtitle: { fontSize: 13, lineHeight: 19, marginTop: 8, paddingRight: 12 }, headerIcon: { width: 50, height: 50, borderRadius: 16, alignItems: "center", justifyContent: "center", marginTop: 2 }, segment: { flexDirection: "row", borderWidth: 1, borderRadius: 13, padding: 3, marginTop: 20 }, segmentButton: { flex: 1, alignItems: "center", borderRadius: 10, paddingVertical: 10 }, segmentText: { fontSize: 12, fontWeight: "800" }, primaryAction: { minHeight: 48, borderRadius: 14, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", marginTop: 14 }, primaryActionText: { fontSize: 14, fontWeight: "800" }, formCard: { borderWidth: 1, borderRadius: 19, padding: 15, marginTop: 14 }, formTitle: { fontSize: 18, fontWeight: "800" }, fieldLabel: { fontSize: 12, fontWeight: "800", marginTop: 16, marginBottom: 7 }, helper: { fontSize: 12, lineHeight: 18 }, optionList: { gap: 8, marginTop: 12 }, selectedCard: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 13, padding: 12, marginTop: 12 }, selectedCopy: { flex: 1 }, selectedLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 1.2 }, selectedName: { fontSize: 14, fontWeight: "800", marginTop: 5 }, selectedMeta: { fontSize: 11, marginTop: 4 }, emptySelection: { fontSize: 12, marginTop: 6 }, input: { minHeight: 46, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, fontSize: 14 }, notesInput: { minHeight: 76, paddingTop: 12, textAlignVertical: "top" }, readOnlyInput: { minHeight: 46, borderWidth: 1, borderRadius: 12, justifyContent: "center", paddingHorizontal: 12 }, readOnlyText: { fontSize: 13, fontWeight: "700" }, chipRow: { flexDirection: "row", gap: 8 }, chip: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9 }, chipText: { fontSize: 12, fontWeight: "700" }, errorText: { fontSize: 12, lineHeight: 18, marginTop: 12 }, saveButton: { minHeight: 47, borderRadius: 13, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", marginTop: 17 }, saveText: { fontSize: 14, fontWeight: "800" }, savedNote: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: 11, padding: 10, marginTop: 12 }, savedText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: "700" }, readback: { fontSize: 11, lineHeight: 17, marginTop: 10 }, listLabel: { fontSize: 12, fontWeight: "800", marginTop: 18 }, sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 25, marginBottom: 11 }, sectionTitle: { fontSize: 18, fontWeight: "800" }, countText: { fontSize: 12, fontWeight: "700" }, productOption: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 15, padding: 12 }, compactProductOption: { padding: 10 }, productIcon: { width: 42, height: 42, borderRadius: 13, alignItems: "center", justifyContent: "center" }, compactProductIcon: { width: 36, height: 36, borderRadius: 11 }, productCopy: { flex: 1, marginLeft: 11 }, productName: { fontSize: 14, fontWeight: "800" }, compactProductName: { fontSize: 13 }, productMeta: { fontSize: 11, marginTop: 4 }, productionCard: { borderWidth: 1, borderRadius: 17, padding: 14, marginBottom: 10 }, productionTop: { flexDirection: "row", alignItems: "flex-start" }, productionTitleCopy: { flex: 1, paddingRight: 8 }, productionName: { fontSize: 16, fontWeight: "800" }, productionDate: { fontSize: 11, marginTop: 5 }, statusBadge: { borderRadius: 9, paddingHorizontal: 8, paddingVertical: 6 }, statusText: { fontSize: 10, fontWeight: "800" }, detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 15 }, detail: { width: "47%", paddingTop: 9, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#DCE5DF" }, detailLabel: { fontSize: 10 }, detailValue: { fontSize: 13, fontWeight: "800", marginTop: 3 }, notes: { fontSize: 11, lineHeight: 17, marginTop: 12, fontStyle: "italic" }, emptyText: { textAlign: "center", fontSize: 13, lineHeight: 20, paddingVertical: 28 }, pressed: { opacity: 0.78 },
 });
