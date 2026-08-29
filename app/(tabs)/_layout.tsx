@@ -44,9 +44,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="products"
         options={{
-          title: isMitra ? "Penjualan" : "Produk",
+          title: isMitra ? "Distribusi" : "Produk",
           href: isMitra ? undefined : null,
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name={isMitra ? "cart.fill" : "shippingbox.fill"} color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="shippingbox.fill" color={color} />,
         }}
       />
       <Tabs.Screen
