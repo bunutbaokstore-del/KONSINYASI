@@ -1,27 +1,48 @@
-name: Supabase Migrations
+name: Supabase Migration Validation
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Deployment target (production is intentionally unavailable)"
+        required: true
+        type: choice
+        options:
+          - non-production
+        default: non-production
+      operation:
+        description: "Allowed operation"
+        required: true
+        type: choice
+        options:
+          - dry-run
+        default: dry-run
+      approval_phrase:
+        description: "Type APPROVE_NON_PRODUCTION_DRY_RUN to continue"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: supabase-production-migrations
+  group: supabase-non-production-validation
   cancel-in-progress: false
 
 jobs:
-  migrate:
-    name: Apply Supabase migrations
+  validate:
+    name: Validate Supabase migrations (non-production dry-run)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment:
+      name: supabase-non-production
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_NONPROD_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_NONPROD_PROJECT_ID }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_NONPROD_DB_PASSWORD }}
+      TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+      OPERATION: ${{ inputs.operation }}
+      APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -31,19 +52,36 @@ jobs:
         with:
           version: 2.116.0
 
-      - name: Verify required configuration
+      - name: Verify non-production target and approval
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "Missing GitHub Secret: SUPABASE_ACCESS_TOKEN" >&2; exit 1; }
-          test -n "$SUPABASE_PROJECT_ID" || { echo "Missing GitHub Secret: SUPABASE_PROJECT_ID" >&2; exit 1; }
-          test -n "$SUPABASE_DB_PASSWORD" || { echo "Missing GitHub Secret: SUPABASE_DB_PASSWORD" >&2; exit 1; }
-          test -d supabase/migrations || { echo "supabase/migrations directory is missing" >&2; exit 1; }
+          test "$TARGET_ENVIRONMENT" = "non-production" || { echo "STOP: production target is not permitted by this workflow" >&2; exit 1; }
+          test "$OPERATION" = "dry-run" || { echo "STOP: only dry-run is permitted by this workflow" >&2; exit 1; }
+          test "$APPROVAL_PHRASE" = "APPROVE_NON_PRODUCTION_DRY_RUN" || { echo "STOP: explicit dry-run approval phrase is invalid" >&2; exit 1; }
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "STOP: missing SUPABASE_NONPROD_ACCESS_TOKEN" >&2; exit 1; }
+          test -n "$SUPABASE_PROJECT_ID" || { echo "STOP: missing SUPABASE_NONPROD_PROJECT_ID" >&2; exit 1; }
+          test -n "$SUPABASE_DB_PASSWORD" || { echo "STOP: missing SUPABASE_NONPROD_DB_PASSWORD" >&2; exit 1; }
+          test -d supabase/migrations || { echo "STOP: supabase/migrations directory is missing" >&2; exit 1; }
+          echo "Target verified: non-production"
+          echo "Operation verified: dry-run only"
 
-      - name: Link Supabase project
+      - name: Link verified non-production project
         shell: bash
-        run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
+        run: |
+          set -euo pipefail
+          supabase link --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
 
-      - name: Apply pending migrations
+      - name: Validate migration plan without applying changes
         shell: bash
-        run: supabase db push --linked
+        run: |
+          set -euo pipefail
+          supabase db diff --linked --schema public
+
+      - name: Stop condition confirmation
+        if: always()
+        shell: bash
+        run: |
+          echo "No production target is available in this workflow."
+          echo "No migration apply step is defined."
+          echo "Any validation failure stops the job."
