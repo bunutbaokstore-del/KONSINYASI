@@ -1,0 +1,137 @@
+name: Supabase Staging Read-Only Audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Audit target (must remain non-production)"
+        required: true
+        type: choice
+        options:
+          - non-production
+        default: non-production
+      confirmation:
+        description: "Type READ_ONLY_STAGING_AUDIT to continue"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-staging-read-only-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit KONSINYASI-STAGING (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: supabase-non-production
+    env:
+      TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      SUPABASE_NONPROD_ACCESS_TOKEN: ${{ secrets.SUPABASE_NONPROD_ACCESS_TOKEN }}
+      SUPABASE_NONPROD_DB_PASSWORD: ${{ secrets.SUPABASE_NONPROD_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: snlpgxugdbcbhpwxqjgp
+      SUPABASE_DB_HOST: aws-0-ap-southeast-2.pooler.supabase.com
+      SUPABASE_DB_PORT: "5432"
+      SUPABASE_DB_NAME: postgres
+      SUPABASE_DB_USER: postgres.snlpgxugdbcbhpwxqjgp
+      PGSSLMODE: require
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify non-production target and read-only mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$TARGET_ENVIRONMENT" = "non-production" || { echo "STOP: only non-production is permitted" >&2; exit 1; }
+          test "$CONFIRMATION" = "READ_ONLY_STAGING_AUDIT" || { echo "STOP: read-only confirmation is invalid" >&2; exit 1; }
+          test "$SUPABASE_NONPROD_ACCESS_TOKEN" != "" || { echo "STOP: missing non-production access token" >&2; exit 1; }
+          test "$SUPABASE_NONPROD_DB_PASSWORD" != "" || { echo "STOP: missing non-production database password" >&2; exit 1; }
+          test "$SUPABASE_PROJECT_REF" = "snlpgxugdbcbhpwxqjgp" || { echo "STOP: staging project ref mismatch" >&2; exit 1; }
+          command -v psql >/dev/null 2>&1 || { echo "STOP: psql is unavailable on the runner" >&2; exit 1; }
+          echo "Target verified: KONSINYASI-STAGING / non-production"
+          echo "Project ref verified: $SUPABASE_PROJECT_REF"
+          echo "Mode verified: read-only"
+
+      - name: Verify remote migration history
+        shell: bash
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_NONPROD_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          psql --no-password --no-psqlrc \
+            --host "$SUPABASE_DB_HOST" \
+            --port "$SUPABASE_DB_PORT" \
+            --username "$SUPABASE_DB_USER" \
+            --dbname "$SUPABASE_DB_NAME" \
+            --command "select version, name from supabase_migrations.schema_migrations order by version;"
+
+      - name: Inspect existing RLS policies
+        shell: bash
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_NONPROD_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          psql --no-password --no-psqlrc \
+            --host "$SUPABASE_DB_HOST" \
+            --port "$SUPABASE_DB_PORT" \
+            --username "$SUPABASE_DB_USER" \
+            --dbname "$SUPABASE_DB_NAME" \
+            --command "select schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check from pg_policies where schemaname = 'public' and tablename in ('consignment_items', 'consignment_requests') order by tablename, policyname;"
+
+      - name: Inspect existing triggers
+        shell: bash
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_NONPROD_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          psql --no-password --no-psqlrc \
+            --host "$SUPABASE_DB_HOST" \
+            --port "$SUPABASE_DB_PORT" \
+            --username "$SUPABASE_DB_USER" \
+            --dbname "$SUPABASE_DB_NAME" \
+            --command "select n.nspname as schema_name, c.relname as table_name, t.tgname as trigger_name, p.proname as function_name, pg_get_triggerdef(t.oid) as trigger_definition from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace join pg_proc p on p.oid = t.tgfoid where not t.tgisinternal and n.nspname = 'public' and c.relname in ('consignment_items', 'consignment_requests') order by c.relname, t.tgname;"
+
+      - name: Inspect tenant helper functions
+        shell: bash
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_NONPROD_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          psql --no-password --no-psqlrc \
+            --host "$SUPABASE_DB_HOST" \
+            --port "$SUPABASE_DB_PORT" \
+            --username "$SUPABASE_DB_USER" \
+            --dbname "$SUPABASE_DB_NAME" \
+            --command "select n.nspname as schema_name, p.proname as function_name, pg_get_function_identity_arguments(p.oid) as identity_arguments, p.prosecdef as security_definer, pg_get_functiondef(p.oid) as function_definition from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in ('current_tenant_id', 'prevent_consignment_request_scope_change') order by p.proname, identity_arguments;"
+
+      - name: Inspect schema objects related to destructive diff
+        shell: bash
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_NONPROD_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          psql --no-password --no-psqlrc \
+            --host "$SUPABASE_DB_HOST" \
+            --port "$SUPABASE_DB_PORT" \
+            --username "$SUPABASE_DB_USER" \
+            --dbname "$SUPABASE_DB_NAME" \
+            --command "select table_schema, table_name, table_type from information_schema.tables where table_schema = 'public' and table_name in ('user_profiles', 'consignment_items', 'consignment_requests', 'stock_movements', 'notifications') order by table_name;"
+          psql --no-password --no-psqlrc \
+            --host "$SUPABASE_DB_HOST" \
+            --port "$SUPABASE_DB_PORT" \
+            --username "$SUPABASE_DB_USER" \
+            --dbname "$SUPABASE_DB_NAME" \
+            --command "select tc.table_schema, tc.table_name, tc.constraint_name, tc.constraint_type, kcu.column_name, ccu.table_schema as foreign_table_schema, ccu.table_name as foreign_table_name, ccu.column_name as foreign_column_name from information_schema.table_constraints tc left join information_schema.key_column_usage kcu on tc.constraint_name = kcu.constraint_name and tc.table_schema = kcu.table_schema left join information_schema.constraint_column_usage ccu on tc.constraint_name = ccu.constraint_name and tc.table_schema = ccu.table_schema where tc.table_schema = 'public' and tc.table_name in ('user_profiles', 'consignment_items', 'consignment_requests', 'stock_movements', 'notifications') order by tc.table_name, tc.constraint_name, kcu.ordinal_position;"
+
+      - name: Read-only completion
+        if: always()
+        shell: bash
+        run: |
+          echo "Read-only audit completed or stopped on failure."
+          echo "No mutating database operation step exists in this workflow."
