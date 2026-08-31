@@ -37,9 +37,9 @@ jobs:
     environment:
       name: supabase-non-production
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_NONPROD_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_NONPROD_PROJECT_ID }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_NONPROD_DB_PASSWORD }}
+      SUPABASE_NONPROD_ACCESS_TOKEN: ${{ secrets.SUPABASE_NONPROD_ACCESS_TOKEN }}
+      SUPABASE_NONPROD_PROJECT_ID: ${{ secrets.SUPABASE_NONPROD_PROJECT_ID }}
+      SUPABASE_NONPROD_DB_PASSWORD: ${{ secrets.SUPABASE_NONPROD_DB_PASSWORD }}
       TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
       OPERATION: ${{ inputs.operation }}
       APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
@@ -59,24 +59,20 @@ jobs:
           test "$TARGET_ENVIRONMENT" = "non-production" || { echo "STOP: production target is not permitted by this workflow" >&2; exit 1; }
           test "$OPERATION" = "dry-run" || { echo "STOP: only dry-run is permitted by this workflow" >&2; exit 1; }
           test "$APPROVAL_PHRASE" = "APPROVE_NON_PRODUCTION_DRY_RUN" || { echo "STOP: explicit dry-run approval phrase is invalid" >&2; exit 1; }
-          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "STOP: missing SUPABASE_NONPROD_ACCESS_TOKEN" >&2; exit 1; }
-          test -n "$SUPABASE_PROJECT_ID" || { echo "STOP: missing SUPABASE_NONPROD_PROJECT_ID" >&2; exit 1; }
-          test -n "$SUPABASE_DB_PASSWORD" || { echo "STOP: missing SUPABASE_NONPROD_DB_PASSWORD" >&2; exit 1; }
+          test -n "$SUPABASE_NONPROD_ACCESS_TOKEN" || { echo "STOP: missing SUPABASE_NONPROD_ACCESS_TOKEN" >&2; exit 1; }
+          test -n "$SUPABASE_NONPROD_PROJECT_ID" || { echo "STOP: missing SUPABASE_NONPROD_PROJECT_ID" >&2; exit 1; }
+          test -n "$SUPABASE_NONPROD_DB_PASSWORD" || { echo "STOP: missing SUPABASE_NONPROD_DB_PASSWORD" >&2; exit 1; }
           test -d supabase/migrations || { echo "STOP: supabase/migrations directory is missing" >&2; exit 1; }
           echo "Target verified: non-production"
           echo "Operation verified: dry-run only"
-
-      - name: Link verified non-production project
-        shell: bash
-        run: |
-          set -euo pipefail
-          supabase link --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
 
       - name: Validate migration plan without applying changes
         shell: bash
         run: |
           set -euo pipefail
-          supabase db diff --linked --schema public
+          SUPABASE_DB_URL="$(SUPABASE_NONPROD_DB_PASSWORD="$SUPABASE_NONPROD_DB_PASSWORD" python3 -c 'import os; from urllib.parse import quote; password = os.environ["SUPABASE_NONPROD_DB_PASSWORD"]; print("postgresql://postgres:" + quote(password, safe="") + "@db.snlpgxugdbcbhpwxqjgp.supabase.co:5432/postgres")')"
+          test -n "$SUPABASE_DB_URL" || { echo "STOP: failed to build SUPABASE_DB_URL" >&2; exit 1; }
+          supabase db diff --db-url "$SUPABASE_DB_URL" --schema public
 
       - name: Stop condition confirmation
         if: always()
