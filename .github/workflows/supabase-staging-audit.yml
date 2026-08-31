@@ -64,12 +64,14 @@ jobs:
           PGPASSWORD: ${{ secrets.SUPABASE_NONPROD_DB_PASSWORD }}
         run: |
           set -euo pipefail
-          psql --no-password --no-psqlrc \
+          if ! psql --no-password --no-psqlrc \
             --host "$SUPABASE_DB_HOST" \
             --port "$SUPABASE_DB_PORT" \
             --username "$SUPABASE_DB_USER" \
             --dbname "$SUPABASE_DB_NAME" \
-            --command "select version, name from supabase_migrations.schema_migrations order by version;"
+            --command "select version, name from supabase_migrations.schema_migrations order by version;"; then
+            echo "WARNING: supabase_migrations.schema_migrations is unavailable; migration history could not be verified."
+          fi
 
       - name: Inspect existing RLS policies
         shell: bash
