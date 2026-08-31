@@ -58,6 +58,43 @@ jobs:
           echo "Project ref verified: $SUPABASE_PROJECT_REF"
           echo "Mode verified: read-only"
 
+      - name: Inspect remote database identity and schemas
+        shell: bash
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_NONPROD_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          psql --no-password --no-psqlrc \
+            --host "$SUPABASE_DB_HOST" \
+            --port "$SUPABASE_DB_PORT" \
+            --username "$SUPABASE_DB_USER" \
+            --dbname "$SUPABASE_DB_NAME" \
+            --command "select current_database(), current_user, inet_server_addr(), inet_server_port(), version();"
+          psql --no-password --no-psqlrc \
+            --host "$SUPABASE_DB_HOST" \
+            --port "$SUPABASE_DB_PORT" \
+            --username "$SUPABASE_DB_USER" \
+            --dbname "$SUPABASE_DB_NAME" \
+            --command "select schema_name from information_schema.schemata order by schema_name;"
+          psql --no-password --no-psqlrc \
+            --host "$SUPABASE_DB_HOST" \
+            --port "$SUPABASE_DB_PORT" \
+            --username "$SUPABASE_DB_USER" \
+            --dbname "$SUPABASE_DB_NAME" \
+            --command "select table_schema, table_name, table_type from information_schema.tables where table_schema not in ('pg_catalog', 'information_schema') and table_schema not like 'pg_toast%' order by table_schema, table_name;"
+          psql --no-password --no-psqlrc \
+            --host "$SUPABASE_DB_HOST" \
+            --port "$SUPABASE_DB_PORT" \
+            --username "$SUPABASE_DB_USER" \
+            --dbname "$SUPABASE_DB_NAME" \
+            --command "select table_schema, table_name, table_type from information_schema.tables where table_name in ('user_profiles', 'consignment_items', 'consignment_requests', 'notifications', 'stock_movements') order by table_schema, table_name;"
+          psql --no-password --no-psqlrc \
+            --host "$SUPABASE_DB_HOST" \
+            --port "$SUPABASE_DB_PORT" \
+            --username "$SUPABASE_DB_USER" \
+            --dbname "$SUPABASE_DB_NAME" \
+            --command "select table_schema, table_name, table_type from information_schema.tables where lower(table_name) like '%migration%' or lower(table_name) like '%schema_migrations%' order by table_schema, table_name;"
+
       - name: Verify remote migration history
         shell: bash
         env:
