@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SUPABASE_DB_URL="$(SUPABASE_NONPROD_DB_PASSWORD="$SUPABASE_NONPROD_DB_PASSWORD" python3 -c 'import os; from urllib.parse import quote; password = os.environ["SUPABASE_NONPROD_DB_PASSWORD"]; print("postgresql://postgres:" + quote(password, safe="") + "@db.snlpgxugdbcbhpwxqjgp.supabase.co:5432/postgres")')"
+          SUPABASE_DB_URL="$(SUPABASE_NONPROD_DB_PASSWORD="$SUPABASE_NONPROD_DB_PASSWORD" python3 -c 'import os; from urllib.parse import quote; password = os.environ["SUPABASE_NONPROD_DB_PASSWORD"]; print("postgresql://postgres.snlpgxugdbcbhpwxqjgp:" + quote(password, safe="") + "@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres")')"
           test -n "$SUPABASE_DB_URL" || { echo "STOP: failed to build SUPABASE_DB_URL" >&2; exit 1; }
           supabase db diff --db-url "$SUPABASE_DB_URL" --schema public
 
