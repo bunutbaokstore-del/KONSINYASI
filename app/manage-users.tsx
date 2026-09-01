@@ -40,7 +40,10 @@ export default function ManageUsersScreen() {
   const currentRole = user?.role ?? "mitra_umkm";
   const currentUserId = user?.id ?? "";
   const canManage = currentRole === "distributor" || currentRole === "admin";
-  const availableRoles = currentRole === "distributor" ? APP_ROLES.filter((item) => item !== "distributor") : MANAGED_ROLES;
+  const availableRoles =
+  currentRole === "distributor"
+    ? APP_ROLES.filter((item) => item !== "distributor")
+    : MANAGED_ROLES;
   const [formVisible, setFormVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
   const [name, setName] = useState("");
@@ -87,7 +90,13 @@ export default function ManageUsersScreen() {
   const busy = createUser.isPending || updateUser.isPending || deleteUser.isPending;
   const users = useMemo(() => (usersQuery.data ?? []) as ManagedUser[], [usersQuery.data]);
 
-  const roleOptions = useMemo(() => availableRoles, [availableRoles]);
+  const roleOptions = useMemo(() => {
+  if (!editingUser && currentRole === "admin") {
+    return availableRoles.filter((item) => item !== "admin");
+  }
+
+  return availableRoles;
+}, [availableRoles, currentRole, editingUser]);
 
   function closeForm() {
     setFormVisible(false);
