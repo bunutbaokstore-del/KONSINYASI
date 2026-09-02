@@ -150,4 +150,184 @@ describe.skipIf(!RUN_LOCAL)("LOCAL two-tenant isolation fixture", () => {
     expect(tenantPlatformRead.error).toBeNull();
     expect(tenantPlatformRead.data).toEqual([]);
   });
+  it("enforces Mitra consignment item tenant isolation for insert, select, update, and delete", async () => {
+    const mitraA = await signIn(fixture[4]);
+    const mitraB = await signIn(fixture[5]);
+
+    const tenantA = fixture[0].id!;
+    const tenantB = fixture[1].id!;
+    const mitraAId = fixture[4].id!;
+    const mitraBId = fixture[5].id!;
+
+    // 1. Mitra A can insert into tenant A.
+    const insertA = await mitraA
+      .from("consignment_items")
+      .insert({
+        distributor_id: tenantA,
+        mitra_user_id: mitraAId,
+        name: "LOCAL-RLS-A",
+        sku: "LOCAL-RLS-A",
+      })
+      .select("id, distributor_id, mitra_user_id")
+      .single();
+
+    expect(insertA.error).toBeNull();
+    expect(insertA.data?.distributor_id).toBe(tenantA);
+    expect(insertA.data?.mitra_user_id).toBe(mitraAId);
+
+    const itemAId = insertA.data!.id;
+
+    // 2. Mitra B can insert into tenant B.
+    const insertB = await mitraB
+      .from("consignment_items")
+      .insert({
+        distributor_id: tenantB,
+        mitra_user_id: mitraBId,
+        name: "LOCAL-RLS-B",
+        sku: "LOCAL-RLS-B",
+      })
+      .select("id, distributor_id, mitra_user_id")
+      .single();
+
+    expect(insertB.error).toBeNull();
+    expect(insertB.data?.distributor_id).toBe(tenantB);
+    expect(insertB.data?.mitra_user_id).toBe(mitraBId);
+
+    const itemBId = insertB.data!.id;
+
+    // 3. Mitra A cannot spoof tenant B on INSERT.
+    const spoofA = await mitraA.from("consignment_items").insert({
+      distributor_id: tenantB,
+      mitra_user_id: mitraAId,
+      name: "LOCAL-RLS-SPOOF-A",
+      sku: "LOCAL-RLS-SPOOF-A",
+    });
+
+    expect(spoofA.error).toBeTruthy();
+
+    // 4. Mitra B cannot spoof tenant A on INSERT.
+    const spoofB = await mitraB.from("consignment_items").insert({
+      distributor_id: tenantA,
+      mitra_user_id: mitraBId,
+      name: "LOCAL-RLS-SPOOF-B",
+      sku: "LOCAL-RLS-SPOOF-B",
+    });
+
+    expect(spoofB.error).toBeTruthy();
+
+    // 5. Mitra A cannot SELECT tenant B's row.
+    const crossSelectA = await mitraA
+      .from("consignment_items")
+      .select("id, distributor_id")
+      .eq("id", itemBId);
+
+    expect(crossSelectA.error).toBeNull();
+    expect(crossSelectA.data).toEqual([]);
+
+    // 6. Mitra B cannot SELECT tenant A's row.
+    const crossSelectB = await mitraB
+      .from("consignment_items")
+      .select("id, distributor_id")
+      .eq("id", itemAId);
+
+    expect(crossSelectB.error).toBeNull();
+    expect(crossSelectB.data).toEqual([]);
+
+    // 7. Mitra A cannot UPDATE tenant B's row.
+    const crossUpdateA = await mitraA
+      .from("consignment_items")
+      .update({ name: "CROSS-TENANT-UPDATE-A" })
+      .eq("id", itemBId)
+      .select("id");
+
+    expect(crossUpdateA.error).toBeNull();
+    expect(crossUpdateA.data).toEqual([]);
+
+    // 8. Mitra B cannot UPDATE tenant A's row.
+    const crossUpdateB = await mitraB
+      .from("consignment_items")
+      .update({ name: "CROSS-TENANT-UPDATE-B" })
+      .eq("id", itemAId)
+      .select("id");
+
+    expect(crossUpdateB.error).toBeNull();
+    expect(crossUpdateB.data).toEqual([]);
+
+    // 9. Mitra A cannot change its own row's tenant scope to B.
+    const changeScopeA = await mitraA
+      .from("consignment_items")
+      .update({ distributor_id: tenantB })
+      .eq("id", itemAId)
+      .select("id, distributor_id");
+
+    expect(changeScopeA.error).toBeTruthy();
+expect(changeScopeA.error?.code).toBe("42501");
+
+    // 10. Mitra B cannot change its own row's tenant scope to A.
+    const changeScopeB = await mitraB
+      .from("consignment_items")
+      .update({ distributor_id: tenantA })
+      .eq("id", itemBId)
+      .select("id, distributor_id");
+
+    expect(changeScopeB.error).toBeTruthy();
+expect(changeScopeB.error?.code).toBe("42501");
+
+    // 11. Mitra A cannot DELETE tenant B's row.
+    const crossDeleteA = await mitraA
+      .from("consignment_items")
+      .delete()
+      .eq("id", itemBId)
+      .select("id");
+
+    expect(crossDeleteA.error).toBeNull();
+    expect(crossDeleteA.data).toEqual([]);
+
+    // 12. Mitra B cannot DELETE tenant A's row.
+    const crossDeleteB = await mitraB
+      .from("consignment_items")
+      .delete()
+      .eq("id", itemAId)
+      .select("id");
+
+    expect(crossDeleteB.error).toBeNull();
+    expect(crossDeleteB.data).toEqual([]);
+
+    // Verify tenant scope and records remain unchanged.
+    const verifyA = await mitraA
+      .from("consignment_items")
+      .select("id, distributor_id, mitra_user_id, name")
+      .eq("id", itemAId)
+      .single();
+
+    const verifyB = await mitraB
+      .from("consignment_items")
+      .select("id, distributor_id, mitra_user_id, name")
+      .eq("id", itemBId)
+      .single();
+
+    expect(verifyA.error).toBeNull();
+    expect(verifyA.data?.distributor_id).toBe(tenantA);
+    expect(verifyA.data?.mitra_user_id).toBe(mitraAId);
+    expect(verifyA.data?.name).toBe("LOCAL-RLS-A");
+
+    expect(verifyB.error).toBeNull();
+    expect(verifyB.data?.distributor_id).toBe(tenantB);
+    expect(verifyB.data?.mitra_user_id).toBe(mitraBId);
+    expect(verifyB.data?.name).toBe("LOCAL-RLS-B");
+
+    // Cleanup disposable rows.
+    const cleanupA = await admin!
+      .from("consignment_items")
+      .delete()
+      .eq("id", itemAId);
+
+    const cleanupB = await admin!
+      .from("consignment_items")
+      .delete()
+      .eq("id", itemBId);
+
+    expect(cleanupA.error).toBeNull();
+    expect(cleanupB.error).toBeNull();
+  });
 });
