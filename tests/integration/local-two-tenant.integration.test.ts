@@ -330,4 +330,85 @@ expect(changeScopeB.error?.code).toBe("42501");
     expect(cleanupA.error).toBeNull();
     expect(cleanupB.error).toBeNull();
   });
+
+  it("denies sysadmin from reading a consignment item when distributor_id equals sysadmin UUID", async () => {
+    const sysadminEmail = "auth32e-sysadmin-regression@example.local";
+    const sysadminPassword = "LocalOnly-E2!safe";
+
+    let sysadminId: string | undefined;
+    let edgeCaseItemId: string | undefined;
+
+    try {
+      const { data: userData, error: userError } =
+        await admin!.auth.admin.createUser({
+          email: sysadminEmail,
+          password: sysadminPassword,
+          email_confirm: true,
+          app_metadata: {
+            role: "sys_admin",
+            status: "active",
+          },
+        });
+
+      expect(userError).toBeNull();
+      expect(userData.user).toBeTruthy();
+
+      sysadminId = userData.user!.id;
+
+      const { data: itemData, error: itemError } = await admin!
+        .from("consignment_items")
+        .insert({
+          distributor_id: sysadminId,
+          mitra_user_id: fixture[4].id,
+          name: "AUTH-3.2E Sysadmin UUID Regression Item",
+          sku: "AUTH-3.2E-SYS-REG",
+        })
+        .select("id")
+        .single();
+
+      expect(itemError).toBeNull();
+      expect(itemData?.id).toBeTruthy();
+
+      edgeCaseItemId = itemData!.id;
+
+      const anonClient = createClient(LOCAL_URL, LOCAL_ANON_KEY!, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      });
+
+      const { data: sessionData, error: signInError } =
+        await anonClient.auth.signInWithPassword({
+          email: sysadminEmail,
+          password: sysadminPassword,
+        });
+
+      expect(signInError).toBeNull();
+      expect(sessionData.session?.access_token).toBeTruthy();
+
+      const sysadminClient = userClient(
+        sessionData.session!.access_token,
+      );
+
+      const result = await sysadminClient
+        .from("consignment_items")
+        .select("id, distributor_id")
+        .eq("id", edgeCaseItemId);
+
+      expect(result.error).toBeNull();
+      expect(result.data).toEqual([]);
+    } finally {
+      if (edgeCaseItemId) {
+        await admin!
+          .from("consignment_items")
+          .delete()
+          .eq("id", edgeCaseItemId);
+      }
+
+      if (sysadminId) {
+        await admin!.auth.admin.deleteUser(sysadminId);
+      }
+    }
+  });
 });
