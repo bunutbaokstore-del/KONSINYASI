@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getDistributorId } from "../server/supabase-admin";
-import { platformRoleFromMetadata } from "../shared/auth";
+import { displayRoleLabel, platformRoleFromMetadata } from "../shared/auth";
 
 describe("KONSINYASI Sysadmin authorization rules", () => {
   it("recognizes sys_admin as a platform role", () => {
@@ -8,6 +8,11 @@ describe("KONSINYASI Sysadmin authorization rules", () => {
     expect(platformRoleFromMetadata("distributor")).toBeNull();
     expect(platformRoleFromMetadata(undefined)).toBeNull();
   });
+  it("uses the platform label instead of the tenant Distributor label", () => {
+    expect(displayRoleLabel("distributor", "sys_admin")).toBe("Sysadmin");
+    expect(displayRoleLabel("distributor", null)).toBe("Distributor");
+  });
+
   it("recognizes sys_admin only from app_metadata", () => {
     const appMetadataUser = {
       id: "11111111-1111-1111-1111-111111111111",

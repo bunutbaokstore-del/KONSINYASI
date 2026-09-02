@@ -68,3 +68,7 @@ export function isManagedRole(value: unknown): value is ManagedRole {
 export function roleFromMetadata(value: unknown): AppRole {
   return isAppRole(value) ? value : "distributor";
 }
+
+export function displayRoleLabel(role: TenantRole, platformRole: PlatformRole | null): string {
+  return platformRole ? PLATFORM_ROLE_LABELS[platformRole] : ROLE_LABELS[role];
+}

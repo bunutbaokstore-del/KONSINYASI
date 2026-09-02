@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { formatSupabaseAuthError, useSupabaseAuth } from "@/lib/supabase-auth-provider";
 import { trpc } from "@/lib/trpc";
-import { ROLE_LABELS } from "@/shared/auth";
+import { displayRoleLabel } from "@/shared/auth";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -139,7 +139,9 @@ export default function HomeScreen() {
 
   const displayName = user?.name?.trim() || "Pengguna KONSINYASI";
   const role = user?.role ?? "distributor";
-  const canManageUsers = role === "distributor" || role === "admin";
+  const isSysAdmin = user?.platformRole === "sys_admin";
+  const roleLabel = displayRoleLabel(role, user?.platformRole ?? null);
+  const canManageUsers = !isSysAdmin && (role === "distributor" || role === "admin");
   return (
     <ScreenContainer className="px-6">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.homeScrollContent} nestedScrollEnabled>
@@ -157,8 +159,8 @@ export default function HomeScreen() {
 
         <View style={[styles.welcomeCard, { backgroundColor: colors.primary }]}>
           <View style={styles.cardIcon}><AppIcon name="handshake" size={28} color={colors.primary} /></View>
-          <Text style={[styles.cardTitle, { color: colors.background }]}>Akun Anda siap digunakan</Text>
-          <Text style={[styles.cardText, { color: "#D9EFE5" }]}>Selamat datang di ruang kerja KONSINYASI. Fitur konsinyasi Anda akan hadir di sini.</Text>
+          <Text style={[styles.cardTitle, { color: colors.background }]}>{isSysAdmin ? "Ruang platform siap digunakan" : "Akun Anda siap digunakan"}</Text>
+          <Text style={[styles.cardText, { color: "#D9EFE5" }]}>{isSysAdmin ? "Kelola tenant Distributor dari dashboard platform tanpa masuk ke ruang kerja tenant." : "Selamat datang di ruang kerja KONSINYASI. Fitur konsinyasi Anda akan hadir di sini."}</Text>
         </View>
 
         <View style={[styles.accountCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -166,18 +168,18 @@ export default function HomeScreen() {
           <Text style={[styles.accountName, { color: colors.foreground }]}>{displayName}</Text>
           {user?.email ? <Text style={[styles.accountEmail, { color: colors.muted }]}>{user.email}</Text> : null}
           <View style={[styles.roleBadge, { backgroundColor: `${colors.primary}16` }]}>
-            <Text style={[styles.roleBadgeText, { color: colors.primary }]}>{ROLE_LABELS[role]}</Text>
+            <Text style={[styles.roleBadgeText, { color: colors.primary }]}>{roleLabel}</Text>
           </View>
         </View>
-        {(role === "mitra_umkm" || canManageUsers) ? (
+        {(!isSysAdmin && (role === "mitra_umkm" || canManageUsers)) ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Buka riwayat mutasi stok" onPress={() => router.push("/stock-history")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && styles.pressed]}>
             <AppIcon name="inventory" size={20} color={colors.primary} />
             <View style={styles.managementCopy}><Text style={[styles.managementTitle, { color: colors.foreground }]}>Riwayat mutasi stok</Text><Text style={[styles.managementText, { color: colors.muted }]}>Lihat catatan perubahan stok yang disetujui</Text></View>
             <AppIcon name="chevron-right" size={20} color={colors.primary} />
           </Pressable>
         ) : null}
-        {role === "mitra_umkm" ? <MitraProductionDashboard /> : null}
-        {role === "mitra_umkm" ? <MitraStockDashboard /> : null}
+        {!isSysAdmin && role === "mitra_umkm" ? <MitraProductionDashboard /> : null}
+        {!isSysAdmin && role === "mitra_umkm" ? <MitraStockDashboard /> : null}
         {canManageUsers ? (
           <>
             <Pressable accessibilityRole="button" accessibilityLabel="Buka Manajemen Pengguna" onPress={() => router.push("/manage-users")} style={({ pressed }) => [styles.managementButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }, pressed && styles.pressed]}>

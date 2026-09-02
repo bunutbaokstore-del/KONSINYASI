@@ -11,7 +11,8 @@ export default function TabLayout() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const isMitra = user?.role === "mitra_umkm";
+  const isSysAdmin = user?.platformRole === "sys_admin";
+  const isMitra = !isSysAdmin && user?.role === "mitra_umkm";
   const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
   const tabBarHeight = 56 + bottomPadding;
 
