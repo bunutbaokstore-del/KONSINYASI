@@ -4,7 +4,7 @@ import {
   type User,
 } from "@supabase/supabase-js";
 import type { Request } from "express";
-import type { AppRole } from "../shared/auth";
+import { isAppRole, type AppRole } from "../shared/auth";
 
 let adminClient: SupabaseClient | null = null;
 let publicClient: SupabaseClient | null = null;
@@ -77,16 +77,15 @@ export async function getSupabaseUserFromRequest(
   return getSupabaseUserFromToken(getSupabasePublicClient(), token);
 }
 
-export function getUserRole(user: User | null): AppRole {
-  const role = user?.app_metadata?.role ?? user?.user_metadata?.role;
-  return role === "admin" ||
-    role === "mitra_umkm" ||
-    role === "supervisor" ||
-    role === "sales_motoris" ||
-    role === "hrd" ||
-    role === "distributor"
-    ? role
-    : "distributor";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_PATTERN.test(value);
+}
+
+export function getUserRole(user: User | null): AppRole | null {
+  const role = user?.app_metadata?.role;
+  return isAppRole(role) ? role : null;
 }
 export async function isActiveSysAdmin(user: User | null): Promise<boolean> {
   if (!user?.id) return false;
@@ -110,15 +109,17 @@ export async function isActiveSysAdmin(user: User | null): Promise<boolean> {
 
   return Boolean(data?.user_id);
 }
-export function getDistributorId(user: User | null) {
-  if (user?.app_metadata?.role === "sys_admin") {
+export function getDistributorId(user: User | null): string | null {
+  const role = user?.app_metadata?.role;
+  if (role === "sys_admin") {
     return null;
   }
-
-  const distributorId =
-    user?.app_metadata?.distributor_id ?? user?.user_metadata?.distributor_id;
-
-  return typeof distributorId === "string" && distributorId.length > 0
-    ? distributorId
-    : (user?.id ?? null);
+  if (role === "distributor") {
+    return isValidUuid(user?.id) ? user.id : null;
+  }
+  if (!isAppRole(role)) {
+    return null;
+  }
+  const distributorId = user?.app_metadata?.distributor_id;
+  return isValidUuid(distributorId) ? distributorId : null;
 }

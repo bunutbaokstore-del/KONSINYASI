@@ -22,7 +22,10 @@ function callerRole(ctx: { supabaseUser: SupabaseUser | null }) {
   return getUserRole(ctx.supabaseUser);
 }
 
-function ensureTargetRoleAllowed(currentRole: AppRole, targetRole: AppRole) {
+function ensureTargetRoleAllowed(currentRole: AppRole | null, targetRole: AppRole) {
+  if (!currentRole) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Role pengguna tidak valid." });
+  }
   if (currentRole === "admin" && !isManagedRole(targetRole)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Admin hanya dapat mengelola role bawahan." });
   }
@@ -128,6 +131,9 @@ function toNotification(notification: { id: string; notification_type: string; t
 
 function toManagedUser(user: { id: string; email?: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown>; created_at: string; last_sign_in_at?: string | null }) {
   const role = getUserRole(user as never);
+  if (!role) {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Pengguna memiliki role yang tidak valid." });
+  }
   const status = user.app_metadata?.status === "disabled" ? "disabled" : "active";
   const metadataName = user.user_metadata?.full_name ?? user.user_metadata?.name;
   return {
@@ -282,6 +288,7 @@ export const appRouter = router({
         .filter((user) => {
           const userRole = getUserRole(user);
           const userDistributorId = typeof user.app_metadata?.distributor_id === "string" ? user.app_metadata.distributor_id : userRole === "distributor" ? user.id : null;
+          if (!userRole) return false;
           if (role === "admin" && userRole === "distributor") return false;
           return user.id === ctx.supabaseUser?.id || userDistributorId === distributorId;
         })
