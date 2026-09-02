@@ -2,7 +2,7 @@ import { COOKIE_NAME } from "../shared/const.js";
 import { isManagedRole, ROLE_LABELS, type AppRole } from "../shared/auth";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router, supabaseProtectedProcedure, userManagementProcedure } from "./_core/trpc";
+import { publicProcedure, router, supabaseProtectedProcedure, sysAdminProcedure, userManagementProcedure } from "./_core/trpc";
 import { getDistributorId, getSupabaseAdminClient, getSupabasePublicClient, getUserRole } from "./supabase-admin";
 import { TRPCError } from "@trpc/server";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
@@ -144,6 +144,43 @@ function toManagedUser(user: { id: string; email?: string; user_metadata?: Recor
 
 export const appRouter = router({
   system: systemRouter,
+  platform: router({
+    me: sysAdminProcedure.query(({ ctx }) => ({
+      userId: ctx.supabaseUser.id,
+      role: "sys_admin" as const,
+    })),
+
+    tenants: sysAdminProcedure.query(async () => {
+      const { data, error } =
+        await getSupabaseAdminClient().auth.admin.listUsers({
+          page: 1,
+          perPage: 1000,
+        });
+
+      if (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Daftar Distributor belum dapat dimuat.",
+        });
+      }
+
+      return data.users
+        .filter((user) => user.app_metadata?.role === "distributor")
+        .map((user) => ({
+          userId: user.id,
+          email: user.email ?? "",
+          name:
+            typeof user.user_metadata?.name === "string"
+              ? user.user_metadata.name
+              : "",
+          phone:
+            typeof user.user_metadata?.phone === "string"
+              ? user.user_metadata.phone
+              : "",
+          status: user.banned_until ? "disabled" : "active",
+        }));
+    }),
+  }),
   registration: router({
     createDistributor: publicProcedure
       .input(z.object({

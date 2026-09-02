@@ -1,5 +1,5 @@
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "../../shared/const";
-import { getUserRole } from "../supabase-admin";
+import { getUserRole, isActiveSysAdmin } from "../supabase-admin";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
@@ -61,14 +61,50 @@ const requireSupabaseUser = t.middleware(async (opts) => {
 });
 
 export const supabaseProtectedProcedure = t.procedure.use(requireSupabaseUser);
+export const sysAdminProcedure = supabaseProtectedProcedure.use(
+  t.middleware(async (opts) => {
+    const { ctx, next } = opts;
 
+    if (ctx.supabaseUser?.app_metadata?.role !== "sys_admin") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Akses hanya untuk Sysadmin.",
+      });
+    }
+
+    const active = await isActiveSysAdmin(ctx.supabaseUser);
+
+    if (!active) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Membership Sysadmin tidak aktif.",
+      });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        supabaseUser: ctx.supabaseUser,
+      },
+    });
+  }),
+);
 export const userManagementProcedure = supabaseProtectedProcedure.use(
   t.middleware(async (opts) => {
     const { ctx, next } = opts;
+    if (ctx.supabaseUser?.app_metadata?.role === "sys_admin") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Sysadmin tidak menggunakan Manajemen Pengguna tenant.",
+      });
+    }
     const role = getUserRole(ctx.supabaseUser);
 
     if (role !== "distributor" && role !== "admin") {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Role ini tidak dapat mengelola pengguna." });
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Role ini tidak dapat mengelola pengguna.",
+      });
     }
 
     return next({
