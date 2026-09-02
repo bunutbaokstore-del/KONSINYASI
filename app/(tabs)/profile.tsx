@@ -25,7 +25,8 @@ export default function ProfileScreen() {
 
   const name = user?.name?.trim() || "Pengguna KONSINYASI";
   const initial = name.charAt(0).toUpperCase();
-  const canManageUsers = user?.role === "distributor" || user?.role === "admin";
+  const isSysAdmin = user?.platformRole === "sys_admin";
+  const canManageUsers = !isSysAdmin && (user?.role === "distributor" || user?.role === "admin");
 
   return (
     <ScreenContainer className="px-6">
@@ -46,6 +47,7 @@ export default function ProfileScreen() {
 
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Pengaturan akun</Text>
         <View style={[styles.menuCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {isSysAdmin ? <ProfileRow icon="verified-user" title="Dashboard Sysadmin" subtitle="Kelola tenant pada level platform" colors={colors} onPress={() => router.push("/platform-admin")} /> : null}
           {canManageUsers ? <ProfileRow icon="group" title="Manajemen Pengguna" subtitle="Buat dan kelola akun sesuai kewenangan" colors={colors} onPress={() => router.push("/manage-users")} /> : null}
           <ProfileRow icon="person" title="Data profil" subtitle="Nama dan alamat email akun" colors={colors} />
           <ProfileRow icon="lock" title="Keamanan akun" subtitle="Sesi Anda terlindungi" colors={colors} />
