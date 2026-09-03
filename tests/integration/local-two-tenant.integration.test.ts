@@ -124,7 +124,7 @@ describe.skipIf(!RUN_LOCAL)("LOCAL two-tenant isolation fixture", () => {
     }
   });
 
-  it("provisions two isolated Distributor â†’ Admin â†’ Mitra trees", () => {
+  it("provisions two isolated Distributor - Admin - Mitra trees", () => {
     expect(fixture[0].distributorId).toBe(fixture[0].id);
     expect(fixture[1].distributorId).toBe(fixture[1].id);
     expect(fixture[2].distributorId).toBe(fixture[0].id);

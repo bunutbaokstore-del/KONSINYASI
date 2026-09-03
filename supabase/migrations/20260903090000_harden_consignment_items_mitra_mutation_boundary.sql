@@ -1,4 +1,4 @@
-﻿-- PHASE 4.2E
+-- PHASE 4.2E
 -- Harden Mitra mutation boundary for public.consignment_items.
 -- Forward-only migration: do not modify previous migrations.
 
