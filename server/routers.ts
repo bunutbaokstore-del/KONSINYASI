@@ -95,7 +95,13 @@ async function notifyWorkspaceAdmins(distributorId: string, requestId: string, t
   const { data, error } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Pesan masuk Admin belum dapat dibuat." });
   const recipientIds = data.users
-    .filter((user) => getUserRole(user) === "admin" && user.app_metadata?.distributor_id === distributorId)
+    .filter((user) => {
+      const userRole = getUserRole(user);
+      if (userRole === "distributor") {
+        return user.id === distributorId;
+      }
+      return userRole === "admin" && user.app_metadata?.distributor_id === distributorId;
+    })
     .map((user) => user.id);
   if (!recipientIds.length) return;
   const { error: notificationError } = await adminClient.from("notifications").insert(recipientIds.map((recipientUserId) => ({ recipient_user_id: recipientUserId, distributor_id: distributorId, request_id: requestId, notification_type: "request_pending", title, body })));
