@@ -7,8 +7,8 @@ import { useColors } from "@/hooks/use-colors";
 import { formatSupabaseAuthError, useSupabaseAuth } from "@/lib/supabase-auth-provider";
 import { trpc } from "@/lib/trpc";
 import { displayRoleLabel } from "@/shared/auth";
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { usePathname, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -24,6 +24,7 @@ import {
 export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
+  const pathname = usePathname();
   const { user, loading, isAuthenticated } = useAuth();
   const { signIn } = useSupabaseAuth();
   const notificationsQuery = trpc.notifications.list.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 30000 });
@@ -32,6 +33,12 @@ export default function HomeScreen() {
   const [password, setPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!loading && isAuthenticated && user?.role === "admin" && !pathname.startsWith("/admin")) {
+      router.replace("/admin" as never);
+    }
+  }, [isAuthenticated, loading, pathname, router, user?.role]);
 
   const handleLogin = async () => {
     const normalizedEmail = email.trim().toLowerCase();

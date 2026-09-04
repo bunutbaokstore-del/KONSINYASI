@@ -12,6 +12,7 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const isSysAdmin = user?.platformRole === "sys_admin";
+  const isAdmin = !isSysAdmin && user?.role === "admin";
   const isMitra = !isSysAdmin && user?.role === "mitra_umkm";
   const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
   const tabBarHeight = 56 + bottomPadding;
@@ -39,6 +40,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: isMitra ? "Beranda" : "Home",
+          href: isAdmin ? null : undefined,
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="house.fill" color={color} />,
         }}
       />
@@ -46,7 +48,7 @@ export default function TabLayout() {
         name="products"
         options={{
           title: isMitra ? "Distribusi" : "Produk",
-          href: isMitra ? undefined : null,
+          href: isAdmin ? null : isMitra ? undefined : null,
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="shippingbox.fill" color={color} />,
         }}
       />
@@ -54,7 +56,7 @@ export default function TabLayout() {
         name="production"
         options={{
           title: "Produksi",
-          href: isMitra ? undefined : null,
+          href: isAdmin ? null : isMitra ? undefined : null,
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="building.2.fill" color={color} />,
         }}
       />
@@ -62,7 +64,7 @@ export default function TabLayout() {
         name="finance"
         options={{
           title: "Keuangan",
-          href: isMitra ? undefined : null,
+          href: isAdmin ? null : isMitra ? undefined : null,
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="wallet.bifold.fill" color={color} />,
         }}
       />
@@ -70,6 +72,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "Profil",
+          href: isAdmin ? null : undefined,
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.fill" color={color} />,
         }}
       />
