@@ -205,6 +205,17 @@ function requireMitraProductionContext(ctx: { supabaseUser: SupabaseUser | null 
   return { mitraUserId: ctx.supabaseUser.id, distributorId };
 }
 
+function requireDistributorReceivingContext(ctx: { supabaseUser: SupabaseUser | null }) {
+  if (getUserRole(ctx.supabaseUser) !== "distributor" || !ctx.supabaseUser) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Receiving hanya tersedia untuk Distributor." });
+  }
+  const distributorId = getDistributorId(ctx.supabaseUser);
+  if (!distributorId || distributorId !== ctx.supabaseUser.id) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Identitas Distributor tidak valid." });
+  }
+  return { distributorId };
+}
+
 async function validateMitraProductionProduct(productId: string, mitraUserId: string, distributorId: string) {
   const adminClient = getSupabaseAdminClient();
   const { data: product, error: productError } = await adminClient
@@ -900,6 +911,33 @@ export const appRouter = router({
           .single();
         if (shipmentError || !shipment) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Shipment berhasil diproses tetapi belum dapat dimuat ulang." });
         return { shipment: toMitraShipment(shipment), idempotent: Boolean(result.idempotent) };
+    }),
+  }),
+  distributorReceiving: router({
+    receive: supabaseProtectedProcedure
+      .input(z.object({ shipmentId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        requireDistributorReceivingContext(ctx);
+        const accessToken = getBearerToken(ctx.req);
+        if (!accessToken) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sesi Distributor tidak ditemukan." });
+        const { data, error } = await getSupabaseUserClient(accessToken).rpc("receive_mitra_shipment", { p_shipment_id: input.shipmentId });
+        if (error) {
+          if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: "Shipment tidak ditemukan pada workspace Distributor." });
+          if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: "Distributor tidak berwenang menerima Shipment ini." });
+          if (error.code === "55000") throw new TRPCError({ code: "CONFLICT", message: "Shipment belum berada pada status shipped atau movement receiving tidak konsisten." });
+          if (error.code === "23514") throw new TRPCError({ code: "BAD_REQUEST", message: "Product Master atau assignment Consignment Item tidak valid." });
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Shipment belum dapat diterima." });
+        }
+        const result = Array.isArray(data) ? data[0] : data;
+        if (!result) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Hasil receiving belum dapat dimuat." });
+        return {
+          shipmentId: result.shipment_id,
+          status: result.shipment_status,
+          quantity: result.shipment_quantity,
+          distributorStockQuantity: result.distributor_stock_quantity,
+          movementId: result.movement_id,
+          idempotent: Boolean(result.idempotent),
+        } as const;
       }),
   }),
   productionEvents: router({

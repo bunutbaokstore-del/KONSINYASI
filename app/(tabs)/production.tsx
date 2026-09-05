@@ -3,9 +3,11 @@ import { MitraHppEditor } from "@/components/mitra-hpp-editor";
 import { MitraProductionStock } from "@/components/mitra-production-stock";
 import { MitraProductShipment } from "@/components/mitra-product-shipment";
 import { MitraShipmentReceiving } from "@/components/mitra-shipment-receiving";
+import { DistributorShipmentReceiving } from "@/components/distributor-shipment-receiving";
 import { MitraStockRecap } from "@/components/mitra-stock-recap";
 import { AppIcon } from "@/components/ui/app-icon";
 import { useColors } from "@/hooks/use-colors";
+import { useAuth } from "@/hooks/use-auth";
 import { formatProductPrice, useMitraProducts } from "@/lib/mitra-products";
 import { saveMitraProductionBudget, type BudgetPeriod, useMitraProductionBudgets } from "@/lib/mitra-production-budgets";
 import { dateKeyToMonthKey, formatBudgetPeriodSelection, getCalendarMonthDays, isDateInSelectedPeriod, parseDateKey, shiftCalendarMonth } from "@/lib/mitra-budget-period";
@@ -29,6 +31,8 @@ function today() {
 
 export default function ProductionScreen() {
   const colors = useColors();
+  const { user } = useAuth();
+  const isDistributor = user?.role === "distributor";
   const products = useMitraProducts();
   const productions = useMitraProductions();
   const budgets = useMitraProductionBudgets();
@@ -203,6 +207,7 @@ export default function ProductionScreen() {
               <Pressable accessibilityRole="button" onPress={() => switchView("history")} style={[styles.segmentButton, view === "history" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "history" ? colors.background : colors.muted }]}>Riwayat</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => switchView("stock")} style={[styles.segmentButton, view === "stock" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "stock" ? colors.background : colors.muted }]}>Stok Hasil</Text></Pressable>
               <Pressable accessibilityRole="button" onPress={() => switchView("recap")} style={[styles.segmentButton, view === "recap" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "recap" ? colors.background : colors.muted }]}>Rekap Stok</Text></Pressable>
+              {isDistributor ? <Pressable accessibilityRole="button" onPress={() => switchView("receiving")} style={[styles.segmentButton, view === "receiving" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "receiving" ? colors.background : colors.muted }]}>Penerimaan</Text></Pressable> : null}
             </View>
             </ScrollView>
             {view === "list" ? (
@@ -226,6 +231,8 @@ export default function ProductionScreen() {
               <MitraStockRecap />
             ) : view === "shipment" ? (
               <MitraProductShipment onSaved={() => switchView("list")} />
+            ) : view === "receiving" && isDistributor ? (
+              <DistributorShipmentReceiving onSaved={() => switchView("receiving")} />
             ) : (
               <MitraShipmentReceiving onSaved={() => switchView("list")} />
             )}
