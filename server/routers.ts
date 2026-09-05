@@ -3,7 +3,7 @@ import { isManagedRole, ROLE_LABELS, type AppRole } from "../shared/auth";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { distributorProcedure, publicProcedure, router, supabaseProtectedProcedure, sysAdminProcedure, userManagementProcedure } from "./_core/trpc";
-import { getDistributorId, getSupabaseAdminClient, getSupabasePublicClient, getUserRole } from "./supabase-admin";
+import { getBearerToken, getDistributorId, getSupabaseAdminClient, getSupabasePublicClient, getSupabaseUserClient, getUserRole } from "./supabase-admin";
 import { TRPCError } from "@trpc/server";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { KTP_CONTENT_TYPES } from "../shared/user-profile";
@@ -846,26 +846,28 @@ export const appRouter = router({
         resultNotes: z.string().trim().max(500).default(""),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { mitraUserId, distributorId } = requireMitraProductionContext(ctx);
-        const client = getSupabaseAdminClient();
-        const { data: event, error: eventError } = await client
+        requireMitraProductionContext(ctx);
+        const accessToken = getBearerToken(ctx.req);
+        if (!accessToken) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sesi Mitra tidak ditemukan." });
+        const userClient = getSupabaseUserClient(accessToken);
+        const { error: rpcError } = await userClient.rpc("complete_mitra_production_event", {
+          p_production_event_id: input.eventId,
+          p_actual_quantity: input.actualQuantity,
+          p_damaged_quantity: input.damagedQuantity,
+          p_yield_percentage: input.yieldPercentage,
+          p_result_notes: input.resultNotes,
+        });
+        if (rpcError) {
+          if (rpcError.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: "Event produksi tidak ditemukan." });
+          if (rpcError.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: "Event produksi tidak berada dalam ruang kerja Mitra." });
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Event produksi belum dapat diproses." });
+        }
+        const { data, error } = await userClient
           .from("mitra_production_events")
-          .select("id, product_id, status")
-          .eq("id", input.eventId)
-          .eq("mitra_user_id", mitraUserId)
-          .eq("distributor_id", distributorId)
-          .maybeSingle();
-        if (eventError || !event) throw new TRPCError({ code: "NOT_FOUND", message: "Event produksi tidak ditemukan." });
-        if (event.status !== "planned") throw new TRPCError({ code: "BAD_REQUEST", message: "Production Event yang sudah selesai bersifat immutable." });
-        await validateMitraProductionProduct(event.product_id, mitraUserId, distributorId);
-        const { data, error } = await client
-          .from("mitra_production_events")
-          .update({ actual_quantity: input.actualQuantity, damaged_quantity: input.damagedQuantity, yield_percentage: input.yieldPercentage, result_notes: input.resultNotes, status: "completed", completed_at: new Date().toISOString() })
-          .eq("id", input.eventId)
-          .eq("status", "planned")
           .select(productionEventSelect)
-          .maybeSingle();
-        if (error || !data) throw new TRPCError({ code: "CONFLICT", message: "Event produksi sudah diproses atau tidak dapat diselesaikan." });
+          .eq("id", input.eventId)
+          .single();
+        if (error || !data) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Event produksi berhasil diproses tetapi belum dapat dimuat ulang." });
         return toProductionEvent(data);
       }),
   }),
