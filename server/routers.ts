@@ -151,6 +151,63 @@ function toProduct(product: { id: string; distributor_id: string; created_by_mit
   } as const;
 }
 
+const productionEventSelect = "id, distributor_id, mitra_user_id, product_id, production_date, budget_period, target_quantity, actual_quantity, damaged_quantity, yield_percentage, notes, result_notes, status, created_at, completed_at";
+
+function toProductionEvent(event: { id: string; distributor_id: string; mitra_user_id: string; product_id: string; production_date: string; budget_period: string; target_quantity: number; actual_quantity?: number | null; damaged_quantity: number; yield_percentage?: number | null; notes: string; result_notes: string; status: string; created_at: string; completed_at?: string | null }) {
+  return {
+    id: event.id,
+    distributorId: event.distributor_id,
+    mitraUserId: event.mitra_user_id,
+    productId: event.product_id,
+    productionDate: event.production_date,
+    budgetPeriod: event.budget_period,
+    targetQuantity: event.target_quantity,
+    actualQuantity: event.actual_quantity ?? null,
+    damagedQuantity: event.damaged_quantity,
+    yieldPercentage: event.yield_percentage ?? null,
+    notes: event.notes,
+    resultNotes: event.result_notes,
+    status: event.status,
+    createdAt: event.created_at,
+    completedAt: event.completed_at ?? null,
+  } as const;
+}
+
+function requireMitraProductionContext(ctx: { supabaseUser: SupabaseUser | null }) {
+  if (getUserRole(ctx.supabaseUser) !== "mitra_umkm" || !ctx.supabaseUser) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Fitur produksi hanya tersedia untuk Mitra UMKM." });
+  }
+  const distributorId = getDistributorId(ctx.supabaseUser);
+  if (!distributorId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Mitra UMKM tidak ditemukan." });
+  }
+  return { mitraUserId: ctx.supabaseUser.id, distributorId };
+}
+
+async function validateMitraProductionProduct(productId: string, mitraUserId: string, distributorId: string) {
+  const adminClient = getSupabaseAdminClient();
+  const { data: product, error: productError } = await adminClient
+    .from("products")
+    .select("id, distributor_id, lifecycle_status")
+    .eq("id", productId)
+    .eq("distributor_id", distributorId)
+    .eq("lifecycle_status", "active")
+    .maybeSingle();
+  if (productError || !product) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Produk aktif dalam Product Master tidak ditemukan." });
+  }
+  const { data: assignment, error: assignmentError } = await adminClient
+    .from("consignment_items")
+    .select("id")
+    .eq("product_id", productId)
+    .eq("mitra_user_id", mitraUserId)
+    .eq("distributor_id", distributorId)
+    .maybeSingle();
+  if (assignmentError || !assignment) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Produk tidak ditugaskan kepada Mitra ini." });
+  }
+}
+
 function toManagedUser(user: { id: string; email?: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown>; created_at: string; last_sign_in_at?: string | null }) {
   const role = getUserRole(user as never);
   if (!role) {
@@ -729,6 +786,87 @@ export const appRouter = router({
           .maybeSingle();
         if (error || !data) throw new TRPCError({ code: "NOT_FOUND", message: "Produk tidak ditemukan." });
         return toProduct(data);
+      }),
+  }),
+  productionEvents: router({
+    list: supabaseProtectedProcedure.query(async ({ ctx }) => {
+      const role = callerRole(ctx);
+      if (role !== "mitra_umkm" && role !== "distributor" && role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Role ini tidak dapat melihat event produksi." });
+      }
+      const distributorId = getDistributorId(ctx.supabaseUser);
+      if (!distributorId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+      }
+      let query = getSupabaseAdminClient()
+        .from("mitra_production_events")
+        .select(productionEventSelect)
+        .eq("distributor_id", distributorId)
+        .order("production_date", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (role === "mitra_umkm") query = query.eq("mitra_user_id", ctx.supabaseUser!.id);
+      const { data, error } = await query;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Event produksi belum dapat dimuat." });
+      return (data ?? []).map(toProductionEvent);
+    }),
+    createPlanned: supabaseProtectedProcedure
+      .input(z.object({
+        productId: z.string().uuid(),
+        productionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal produksi tidak valid."),
+        budgetPeriod: z.enum(["Hari", "Minggu", "Bulan"]),
+        targetQuantity: z.number().int().min(0),
+        notes: z.string().trim().max(500).default(""),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { mitraUserId, distributorId } = requireMitraProductionContext(ctx);
+        await validateMitraProductionProduct(input.productId, mitraUserId, distributorId);
+        const { data, error } = await getSupabaseAdminClient()
+          .from("mitra_production_events")
+          .insert({
+            distributor_id: distributorId,
+            mitra_user_id: mitraUserId,
+            product_id: input.productId,
+            production_date: input.productionDate,
+            budget_period: input.budgetPeriod,
+            target_quantity: input.targetQuantity,
+            notes: input.notes,
+            status: "planned",
+          })
+          .select(productionEventSelect)
+          .single();
+        if (error || !data) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Event produksi belum dapat disimpan." });
+        return toProductionEvent(data);
+      }),
+    complete: supabaseProtectedProcedure
+      .input(z.object({
+        eventId: z.string().uuid(),
+        actualQuantity: z.number().int().positive(),
+        damagedQuantity: z.number().int().min(0).default(0),
+        yieldPercentage: z.number().min(0).nullable().default(null),
+        resultNotes: z.string().trim().max(500).default(""),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { mitraUserId, distributorId } = requireMitraProductionContext(ctx);
+        const client = getSupabaseAdminClient();
+        const { data: event, error: eventError } = await client
+          .from("mitra_production_events")
+          .select("id, product_id, status")
+          .eq("id", input.eventId)
+          .eq("mitra_user_id", mitraUserId)
+          .eq("distributor_id", distributorId)
+          .maybeSingle();
+        if (eventError || !event) throw new TRPCError({ code: "NOT_FOUND", message: "Event produksi tidak ditemukan." });
+        if (event.status !== "planned") throw new TRPCError({ code: "BAD_REQUEST", message: "Production Event yang sudah selesai bersifat immutable." });
+        await validateMitraProductionProduct(event.product_id, mitraUserId, distributorId);
+        const { data, error } = await client
+          .from("mitra_production_events")
+          .update({ actual_quantity: input.actualQuantity, damaged_quantity: input.damagedQuantity, yield_percentage: input.yieldPercentage, result_notes: input.resultNotes, status: "completed", completed_at: new Date().toISOString() })
+          .eq("id", input.eventId)
+          .eq("status", "planned")
+          .select(productionEventSelect)
+          .maybeSingle();
+        if (error || !data) throw new TRPCError({ code: "CONFLICT", message: "Event produksi sudah diproses atau tidak dapat diselesaikan." });
+        return toProductionEvent(data);
       }),
   }),
   productApproval: router({
