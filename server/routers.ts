@@ -2,7 +2,7 @@ import { COOKIE_NAME } from "../shared/const.js";
 import { isManagedRole, ROLE_LABELS, type AppRole } from "../shared/auth";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router, supabaseProtectedProcedure, sysAdminProcedure, userManagementProcedure } from "./_core/trpc";
+import { distributorProcedure, publicProcedure, router, supabaseProtectedProcedure, sysAdminProcedure, userManagementProcedure } from "./_core/trpc";
 import { getDistributorId, getSupabaseAdminClient, getSupabasePublicClient, getUserRole } from "./supabase-admin";
 import { TRPCError } from "@trpc/server";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
@@ -584,7 +584,7 @@ export const appRouter = router({
         await notifyWorkspaceAdmins(distributorId, data.id, "Pengajuan perubahan stok", `${mitraName} mengajukan perubahan stok menjadi ${input.proposedStockQuantity}.`);
         return toSupplierRequest(data);
       }),
-    review: userManagementProcedure
+    review: distributorProcedure
       .input(z.object({ requestId: z.string().uuid(), decision: z.enum(["approved", "rejected"]), reviewNote: z.string().trim().max(500).optional() }))
       .mutation(async ({ ctx, input }) => {
         const distributorId = getDistributorId(ctx.supabaseUser);
@@ -618,6 +618,60 @@ export const appRouter = router({
           .maybeSingle();
         if (requestError || !request) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Hasil keputusan belum dapat dimuat." });
         return toSupplierRequest(request);
+      }),
+  }),
+  productApproval: router({
+    notifyDistributor: supabaseProtectedProcedure
+      .input(z.object({
+        requestId: z.string().uuid(),
+        title: z.string().trim().min(1).max(120),
+        body: z.string().trim().min(1).max(500),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (callerRole(ctx) !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Hanya Administrator yang dapat mengirim informasi approval." });
+        }
+
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Administrator tidak ditemukan." });
+        }
+
+        const adminClient = getSupabaseAdminClient();
+        const { data: request, error: requestError } = await adminClient
+          .from("consignment_requests")
+          .select("id, distributor_id, status")
+          .eq("id", input.requestId)
+          .eq("distributor_id", distributorId)
+          .maybeSingle();
+        if (requestError || !request) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Pengajuan tidak ditemukan dalam ruang kerja Administrator." });
+        }
+        if (request.status !== "pending") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Informasi hanya dapat dikirim untuk pengajuan yang masih menunggu approval." });
+        }
+
+        const { data: distributor, error: distributorError } = await adminClient.auth.admin.getUserById(distributorId);
+        if (distributorError || !distributor.user || getUserRole(distributor.user) !== "distributor") {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Distributor dalam ruang kerja ini tidak ditemukan." });
+        }
+
+        const { data, error } = await adminClient
+          .from("notifications")
+          .insert({
+            recipient_user_id: distributorId,
+            distributor_id: distributorId,
+            request_id: request.id,
+            notification_type: "request_pending",
+            title: input.title,
+            body: input.body,
+          })
+          .select("id, notification_type, title, body, is_read, request_id, created_at")
+          .single();
+        if (error || !data) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Informasi belum dapat dikirim kepada Distributor." });
+        }
+        return toNotification(data);
       }),
   }),
   mitraDashboard: router({

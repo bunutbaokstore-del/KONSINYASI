@@ -115,3 +115,26 @@ export const userManagementProcedure = supabaseProtectedProcedure.use(
     });
   }),
 );
+
+export function isDistributorRole(user: Parameters<typeof getUserRole>[0]) {
+  return getUserRole(user) === "distributor";
+}
+
+export const distributorProcedure = supabaseProtectedProcedure.use(
+  t.middleware(async (opts) => {
+    const { ctx, next } = opts;
+    if (!isDistributorRole(ctx.supabaseUser)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Hanya Distributor yang dapat melakukan approval supplier.",
+      });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        supabaseUser: ctx.supabaseUser,
+      },
+    });
+  }),
+);
