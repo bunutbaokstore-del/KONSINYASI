@@ -98,7 +98,7 @@ export function MitraDistribution() {
         </View>
       ) : null}
       {view !== null ? (
-        <View>
+        <View style={styles.content}>
           <Pressable
             accessibilityRole="button"
             onPress={() => selectView(null)}
@@ -305,6 +305,7 @@ function StatusBadge({
 }
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  content: { flex: 1 },
   menuList: { marginTop: 20, gap: 10 },
   menuCard: {
     minHeight: 64,
