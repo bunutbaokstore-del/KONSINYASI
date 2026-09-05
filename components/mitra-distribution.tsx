@@ -24,7 +24,6 @@ const MENUS: {
   icon: "send" | "shippingbox" | "inventory" | "verified";
 }[] = [
   { key: "products", label: "Tambah Produk", icon: "inventory" },
-  { key: "supply", label: "Ajukan Supply", icon: "send" },
   { key: "shipment", label: "Pengiriman", icon: "shippingbox" },
   { key: "receiving", label: "Penerimaan", icon: "inventory" },
   { key: "history", label: "Riwayat Distribusi", icon: "verified" },
