@@ -93,6 +93,7 @@ export default function RootLayout() {
             <Stack.Screen name="auth/callback" />
             <Stack.Screen name="reset-password" />
             <Stack.Screen name="manage-users" />
+            <Stack.Screen name="mitra-users" />
             <Stack.Screen name="platform-admin" />
             <Stack.Screen name="change-password" />
           </Stack>
