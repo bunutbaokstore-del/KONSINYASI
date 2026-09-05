@@ -152,6 +152,7 @@ function toProduct(product: { id: string; distributor_id: string; created_by_mit
 }
 
 const productionEventSelect = "id, distributor_id, mitra_user_id, product_id, production_date, budget_period, target_quantity, actual_quantity, damaged_quantity, yield_percentage, notes, result_notes, status, created_at, completed_at";
+const mitraShipmentSelect = "id, distributor_id, mitra_user_id, product_id, consignment_item_id, quantity, status, shipment_date, notes, created_at, updated_at, shipped_at, received_at, received_by, received_notes";
 
 function toProductionEvent(event: { id: string; distributor_id: string; mitra_user_id: string; product_id: string; production_date: string; budget_period: string; target_quantity: number; actual_quantity?: number | null; damaged_quantity: number; yield_percentage?: number | null; notes: string; result_notes: string; status: string; created_at: string; completed_at?: string | null }) {
   return {
@@ -170,6 +171,26 @@ function toProductionEvent(event: { id: string; distributor_id: string; mitra_us
     status: event.status,
     createdAt: event.created_at,
     completedAt: event.completed_at ?? null,
+  } as const;
+}
+
+function toMitraShipment(shipment: { id: string; distributor_id: string; mitra_user_id: string; product_id: string; consignment_item_id: string; quantity: number; status: string; shipment_date: string; notes: string; created_at: string; updated_at: string; shipped_at?: string | null; received_at?: string | null; received_by?: string | null; received_notes?: string | null }) {
+  return {
+    id: shipment.id,
+    distributorId: shipment.distributor_id,
+    mitraUserId: shipment.mitra_user_id,
+    productId: shipment.product_id,
+    consignmentItemId: shipment.consignment_item_id,
+    quantity: shipment.quantity,
+    status: shipment.status,
+    shipmentDate: shipment.shipment_date,
+    notes: shipment.notes,
+    createdAt: shipment.created_at,
+    updatedAt: shipment.updated_at,
+    shippedAt: shipment.shipped_at ?? null,
+    receivedAt: shipment.received_at ?? null,
+    receivedBy: shipment.received_by ?? null,
+    receivedNotes: shipment.received_notes ?? null,
   } as const;
 }
 
@@ -205,6 +226,28 @@ async function validateMitraProductionProduct(productId: string, mitraUserId: st
     .maybeSingle();
   if (assignmentError || !assignment) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Produk tidak ditugaskan kepada Mitra ini." });
+  }
+}
+
+async function validateMitraShipmentAssignment(productId: string, consignmentItemId: string, mitraUserId: string, distributorId: string) {
+  const adminClient = getSupabaseAdminClient();
+  const { data: product, error: productError } = await adminClient
+    .from("products")
+    .select("id, distributor_id, lifecycle_status")
+    .eq("id", productId)
+    .eq("distributor_id", distributorId)
+    .eq("lifecycle_status", "active")
+    .maybeSingle();
+  if (productError || !product) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Produk aktif dalam Product Master tidak ditemukan." });
+  }
+  const { data: assignment, error: assignmentError } = await adminClient
+    .from("consignment_items")
+    .select("id, product_id, mitra_user_id, distributor_id")
+    .eq("id", consignmentItemId)
+    .maybeSingle();
+  if (assignmentError || !assignment || assignment.product_id !== productId || assignment.mitra_user_id !== mitraUserId || assignment.distributor_id !== distributorId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Assignment Consignment Item tidak valid untuk Shipment ini." });
   }
 }
 
@@ -786,6 +829,77 @@ export const appRouter = router({
           .maybeSingle();
         if (error || !data) throw new TRPCError({ code: "NOT_FOUND", message: "Produk tidak ditemukan." });
         return toProduct(data);
+      }),
+  }),
+  mitraShipments: router({
+    list: supabaseProtectedProcedure.query(async ({ ctx }) => {
+      const role = callerRole(ctx);
+      if (!role || !["mitra_umkm", "distributor", "admin"].includes(role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Role ini tidak dapat melihat Shipment." });
+      }
+      const distributorId = getDistributorId(ctx.supabaseUser);
+      if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+      let query = getSupabaseAdminClient()
+        .from("mitra_shipments")
+        .select(mitraShipmentSelect)
+        .eq("distributor_id", distributorId)
+        .order("shipment_date", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (role === "mitra_umkm") query = query.eq("mitra_user_id", ctx.supabaseUser!.id);
+      const { data, error } = await query;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Shipment belum dapat dimuat." });
+      return (data ?? []).map(toMitraShipment);
+    }),
+    create: supabaseProtectedProcedure
+      .input(z.object({
+        productId: z.string().uuid(),
+        consignmentItemId: z.string().uuid(),
+        quantity: z.number().int().positive(),
+        shipmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal Shipment tidak valid."),
+        notes: z.string().trim().max(500).default(""),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { mitraUserId, distributorId } = requireMitraProductionContext(ctx);
+        await validateMitraShipmentAssignment(input.productId, input.consignmentItemId, mitraUserId, distributorId);
+        const { data, error } = await getSupabaseAdminClient()
+          .from("mitra_shipments")
+          .insert({
+            distributor_id: distributorId,
+            mitra_user_id: mitraUserId,
+            product_id: input.productId,
+            consignment_item_id: input.consignmentItemId,
+            quantity: input.quantity,
+            status: "planned",
+            shipment_date: input.shipmentDate,
+            notes: input.notes,
+          })
+          .select(mitraShipmentSelect)
+          .single();
+        if (error || !data) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Shipment belum dapat disimpan." });
+        return toMitraShipment(data);
+      }),
+    ship: supabaseProtectedProcedure
+      .input(z.object({ shipmentId: z.string().uuid() }))
+      .mutation(async ({ ctx, input }) => {
+        requireMitraProductionContext(ctx);
+        const accessToken = getBearerToken(ctx.req);
+        if (!accessToken) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sesi Mitra tidak ditemukan." });
+        const { data, error } = await getSupabaseUserClient(accessToken).rpc("ship_mitra_shipment", { p_shipment_id: input.shipmentId });
+        if (error) {
+          if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: "Shipment atau Production Stock tidak ditemukan." });
+          if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: "Shipment tidak berada dalam ruang kerja Mitra." });
+          if (error.code === "22003") throw new TRPCError({ code: "BAD_REQUEST", message: "Production Stock tidak mencukupi." });
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Shipment belum dapat dikirim." });
+        }
+        const result = Array.isArray(data) ? data[0] : data;
+        if (!result) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Hasil pengiriman belum dapat dimuat." });
+        const { data: shipment, error: shipmentError } = await getSupabaseAdminClient()
+          .from("mitra_shipments")
+          .select(mitraShipmentSelect)
+          .eq("id", input.shipmentId)
+          .single();
+        if (shipmentError || !shipment) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Shipment berhasil diproses tetapi belum dapat dimuat ulang." });
+        return { shipment: toMitraShipment(shipment), idempotent: Boolean(result.idempotent) };
       }),
   }),
   productionEvents: router({
