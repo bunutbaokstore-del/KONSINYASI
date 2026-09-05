@@ -5,7 +5,7 @@ import { REQUEST_STATUS_LABELS, toProductRequestPayload, validateProductRequest,
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers";
 import { useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 type ProductView = "mine" | "requests" | "form";
 type RouterOutputs = inferRouterOutputs<AppRouter>;
@@ -68,7 +68,7 @@ export function MitraProductRequest() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }, view === "form" && styles.formRoot]}>
       <View style={[styles.subnav, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <SubnavButton label="Produk Saya" icon="inventory" selected={view === "mine"} onPress={() => selectView("mine")} colors={colors} />
         <SubnavButton label="Pengajuan Produk" icon="send" selected={view === "requests"} onPress={() => selectView("requests")} colors={colors} />
@@ -93,7 +93,42 @@ function RequestList({ query, colors, successMessage, onAdd }: { query: QuerySta
 }
 
 function RequestForm({ form, formError, isSubmitting, colors, onChange, onSubmit, onCancel }: { form: FormState; formError: string | null; isSubmitting: boolean; colors: ReturnType<typeof useColors>; onChange: (field: keyof FormState, value: string) => void; onSubmit: () => void; onCancel: () => void }) {
-  return <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.formHeader}><View style={styles.rowCopy}><Text style={[styles.panelTitle, { color: colors.foreground }]}>Tambah Pengajuan Produk</Text><Text style={[styles.panelHelper, { color: colors.muted }]}>Pengajuan akan menunggu persetujuan Distributor.</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Tutup form pengajuan" onPress={onCancel} style={({ pressed }) => [styles.closeButton, { borderColor: colors.border }, pressed && styles.pressed]}><AppIcon name="close" size={18} color={colors.foreground} /></Pressable></View><Field label="Nama Produk" value={form.name} onChangeText={(value) => onChange("name", value)} placeholder="Contoh: Sambal Ijo" colors={colors} /><Field label="SKU (opsional)" value={form.sku} onChangeText={(value) => onChange("sku", value)} placeholder="Contoh: SBL-001" colors={colors} /><Field label="Unit" value={form.unit} onChangeText={(value) => onChange("unit", value)} placeholder="pcs" colors={colors} /><Field label="Stok Awal" value={form.proposedStockQuantity} onChangeText={(value) => onChange("proposedStockQuantity", value.replace(/[^0-9]/g, ""))} placeholder="0" keyboardType="number-pad" colors={colors} /><Field label="Minimum Stok" value={form.proposedMinimumStock} onChangeText={(value) => onChange("proposedMinimumStock", value.replace(/[^0-9]/g, ""))} placeholder="0" keyboardType="number-pad" colors={colors} /><Field label="Catatan / Alasan Pengajuan" value={form.reason} onChangeText={(value) => onChange("reason", value)} placeholder="Jelaskan alasan pengajuan produk" multiline colors={colors} />{formError ? <Text style={[styles.errorText, { color: colors.error }]}>{formError}</Text> : null}<Pressable accessibilityRole="button" onPress={onSubmit} disabled={isSubmitting} style={({ pressed }) => [styles.submitButton, { backgroundColor: colors.primary }, pressed && styles.pressed, isSubmitting && styles.disabled]}>{isSubmitting ? <ActivityIndicator color={colors.background} /> : <Text style={[styles.addButtonText, { color: colors.background }]}>Kirim Pengajuan</Text>}</Pressable></View>;
+  return (
+    <KeyboardAvoidingView
+      style={styles.formKeyboard}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+    >
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={styles.formScrollContent}
+      >
+        <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.formHeader}>
+            <View style={styles.rowCopy}>
+              <Text style={[styles.panelTitle, { color: colors.foreground }]}>Tambah Pengajuan Produk</Text>
+              <Text style={[styles.panelHelper, { color: colors.muted }]}>Pengajuan akan menunggu persetujuan Distributor.</Text>
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Tutup form pengajuan" onPress={onCancel} style={({ pressed }) => [styles.closeButton, { borderColor: colors.border }, pressed && styles.pressed]}>
+              <AppIcon name="close" size={18} color={colors.foreground} />
+            </Pressable>
+          </View>
+          <Field label="Nama Produk" value={form.name} onChangeText={(value) => onChange("name", value)} placeholder="Contoh: Sambal Ijo" colors={colors} />
+          <Field label="SKU (opsional)" value={form.sku} onChangeText={(value) => onChange("sku", value)} placeholder="Contoh: SBL-001" colors={colors} />
+          <Field label="Unit" value={form.unit} onChangeText={(value) => onChange("unit", value)} placeholder="pcs" colors={colors} />
+          <Field label="Stok Awal" value={form.proposedStockQuantity} onChangeText={(value) => onChange("proposedStockQuantity", value.replace(/[^0-9]/g, ""))} placeholder="0" keyboardType="number-pad" colors={colors} />
+          <Field label="Minimum Stok" value={form.proposedMinimumStock} onChangeText={(value) => onChange("proposedMinimumStock", value.replace(/[^0-9]/g, ""))} placeholder="0" keyboardType="number-pad" colors={colors} />
+          <Field label="Catatan / Alasan Pengajuan" value={form.reason} onChangeText={(value) => onChange("reason", value)} placeholder="Jelaskan alasan pengajuan produk" multiline colors={colors} />
+          {formError ? <Text style={[styles.errorText, { color: colors.error }]}>{formError}</Text> : null}
+          <Pressable accessibilityRole="button" onPress={onSubmit} disabled={isSubmitting} style={({ pressed }) => [styles.submitButton, { backgroundColor: colors.primary }, pressed && styles.pressed, isSubmitting && styles.disabled]}>
+            {isSubmitting ? <ActivityIndicator color={colors.background} /> : <Text style={[styles.addButtonText, { color: colors.background }]}>Kirim Pengajuan</Text>}
+          </Pressable>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
 }
 
 function Field({ label, value, onChangeText, placeholder, keyboardType, multiline, colors }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; keyboardType?: "number-pad"; multiline?: boolean; colors: ReturnType<typeof useColors> }) {
@@ -110,6 +145,9 @@ function ErrorState({ message, onRetry, colors }: { message: string; onRetry: ()
 
 const styles = StyleSheet.create({
   root: { marginTop: 14 },
+  formRoot: { flex: 1 },
+  formKeyboard: { flex: 1 },
+  formScrollContent: { paddingBottom: 28 },
   subnav: { borderWidth: 1, borderRadius: 15, padding: 5, flexDirection: "row", gap: 6 },
   subnavButton: { flex: 1, minHeight: 42, borderWidth: 1, borderRadius: 11, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 8 },
   subnavText: { fontSize: 11, fontWeight: "800" },
