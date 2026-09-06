@@ -23,8 +23,9 @@ describe("Production READ persistent migration", () => {
     expect(source).not.toContain("const productions = legacyProductions");
   });
 
-  it("keeps CREATE and COMPLETE on legacy helpers for this sub-phase", () => {
-    expect(source).toContain("saveMitraProduction({");
+  it("keeps CREATE persistent and COMPLETE on the legacy helper boundary", () => {
+    expect(source).toContain("trpc.productionEvents.createPlanned.useMutation");
+    expect(source).not.toContain("saveMitraProduction({");
     expect(source).toContain("updateMitraProductionResult({");
     expect(source).not.toContain("trpc.productionEvents.create.useMutation()");
     expect(source).not.toContain("trpc.productionEvents.complete.useMutation()");
