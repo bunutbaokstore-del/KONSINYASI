@@ -1,17 +1,55 @@
 import { useColors } from "@/hooks/use-colors";
-import { useMitraProductions } from "@/lib/mitra-productions";
+import { trpc } from "@/lib/trpc";
 import { useMitraProducts } from "@/lib/mitra-products";
-import { updateMitraShipmentStatus, useMitraShipments } from "@/lib/mitra-shipments";
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
-function today() { return new Date().toISOString().slice(0, 10); }
-export function MitraShipmentReceiving({ onSaved }: { onSaved?: () => void }) {
-  const colors = useColors(); const products = useMitraProducts(); const productions = useMitraProductions(); const shipments = useMitraShipments();
-  const [selectedId, setSelectedId] = useState<string | null>(shipments.find((shipment) => shipment.status === "Dikirim")?.id ?? null); const [receivedDate, setReceivedDate] = useState(today()); const [receivedNotes, setReceivedNotes] = useState(""); const [error, setError] = useState<string | null>(null); const [message, setMessage] = useState<string | null>(null);
-  const inTransit = shipments.filter((shipment) => shipment.status === "Dikirim"); const selected = inTransit.find((shipment) => shipment.id === selectedId);
-  const handleReceive = () => { if (!selected) { setError("Pilih pengiriman berstatus Dikirim terlebih dahulu."); return; } try { updateMitraShipmentStatus(selected.id, "Diterima", products, productions, { receivedDate, receivedNotes }); setError(null); setMessage("Penerimaan berhasil disimpan dan status menjadi Diterima."); setSelectedId(null); setReceivedNotes(""); onSaved?.(); } catch (caught) { setMessage(null); setError(caught instanceof Error ? caught.message : "Penerimaan tidak dapat disimpan."); } };
-  return <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.title, { color: colors.foreground }]}>Penerimaan Produk</Text><Text style={[styles.helper, { color: colors.muted }]}>Pilih pengiriman yang sudah berstatus Dikirim untuk mencatat penerimaan.</Text><Text style={[styles.label, { color: colors.foreground }]}>Pilih Pengiriman</Text>{inTransit.length ? inTransit.map((shipment) => <Pressable key={shipment.id} accessibilityRole="button" onPress={() => { setSelectedId(shipment.id); setError(null); setMessage(null); }} style={[styles.shipmentOption, { borderColor: selectedId === shipment.id ? colors.primary : colors.border, backgroundColor: selectedId === shipment.id ? `${colors.primary}12` : colors.background }]}><View style={styles.copy}><Text style={[styles.name, { color: colors.foreground }]}>{products.find((product) => product.id === shipment.productId)?.name ?? "Produk tidak ditemukan"}</Text><Text style={[styles.meta, { color: colors.muted }]}>{shipment.distributorName} · {shipment.quantity} unit · dikirim {shipment.shipmentDate}</Text></View><Text style={[styles.status, { color: colors.primary }]}>Dikirim</Text></Pressable>) : <Text style={[styles.empty, { color: colors.muted }]}>Tidak ada pengiriman berstatus Dikirim.</Text>}{selected ? <><View style={[styles.selectedCard, { borderColor: colors.primary, backgroundColor: `${colors.primary}08` }]}><Text style={[styles.selectedLabel, { color: colors.primary }]}>PENGIRIMAN DIPILIH</Text><Text style={[styles.selectedText, { color: colors.foreground }]}>{selected.distributorName} · {selected.quantity} unit</Text></View><Text style={[styles.label, { color: colors.foreground }]}>Tanggal Penerimaan</Text><TextInput value={receivedDate} onChangeText={setReceivedDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} style={[styles.input, { color: colors.foreground, borderColor: colors.border }]} /><Text style={[styles.label, { color: colors.foreground }]}>Catatan Penerimaan</Text><TextInput value={receivedNotes} onChangeText={setReceivedNotes} placeholder="Catatan penerimaan (opsional)" placeholderTextColor={colors.muted} multiline style={[styles.input, styles.notes, { color: colors.foreground, borderColor: colors.border }]} />{error ? <Text style={[styles.error, { color: colors.error }]}>{error}</Text> : null}<Pressable accessibilityRole="button" onPress={handleReceive} style={({ pressed }) => [styles.button, { backgroundColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.buttonText, { color: colors.background }]}>Simpan Penerimaan</Text></Pressable></> : null}{message ? <Text style={[styles.message, { color: colors.success }]}>{message}</Text> : null}<Text style={[styles.historyTitle, { color: colors.foreground }]}>Riwayat Penerimaan</Text>{shipments.filter((shipment) => shipment.status === "Diterima").map((shipment) => <View key={shipment.id} style={[styles.historyRow, { borderTopColor: colors.border }]}><View style={styles.copy}><Text style={[styles.name, { color: colors.foreground }]}>{products.find((product) => product.id === shipment.productId)?.name ?? "Produk tidak ditemukan"}</Text><Text style={[styles.meta, { color: colors.muted }]}>{shipment.distributorName} · {shipment.quantity} unit · diterima {shipment.receivedDate ?? "-"}</Text><Text style={[styles.meta, { color: colors.muted }]}>{shipment.receivedNotes || "Tidak ada catatan penerimaan"}</Text></View><Text style={[styles.status, { color: colors.success }]}>Diterima</Text></View>)}</View>;
+const STATUS_LABELS: Record<string, string> = {
+  planned: "Direncanakan",
+  shipped: "Dikirim",
+  received: "Diterima",
+};
+
+export function MitraShipmentReceiving(_props: { onSaved?: () => void }) {
+  const colors = useColors();
+  const products = useMitraProducts();
+  const shipmentsQuery = trpc.mitraShipments.list.useQuery();
+  const shipments = shipmentsQuery.data ?? [];
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <Text style={[styles.title, { color: colors.foreground }]}>Riwayat Pengiriman</Text>
+      <Text style={[styles.helper, { color: colors.muted }]}>Status penerimaan diperbarui oleh Distributor. Mitra hanya dapat melihat riwayat shipment persistent.</Text>
+      {shipmentsQuery.isLoading ? <Text style={[styles.state, { color: colors.muted }]}>Memuat riwayat pengiriman...</Text> : null}
+      {shipmentsQuery.isError ? <Text style={[styles.error, { color: colors.error }]}>Riwayat pengiriman belum dapat dimuat. Coba lagi nanti.</Text> : null}
+      {!shipmentsQuery.isLoading && !shipmentsQuery.isError && !shipments.length ? <Text style={[styles.empty, { color: colors.muted }]}>Belum ada riwayat pengiriman.</Text> : null}
+      {!shipmentsQuery.isLoading && !shipmentsQuery.isError ? shipments.map((shipment) => {
+        const productName = products.find((product) => product.id === shipment.productId)?.name ?? "Produk tidak ditemukan";
+        const statusLabel = STATUS_LABELS[shipment.status] ?? shipment.status;
+        return <View key={shipment.id} style={[styles.historyRow, { borderTopColor: colors.border }]}>
+          <View style={styles.copy}>
+            <Text style={[styles.name, { color: colors.foreground }]}>{productName}</Text>
+            <Text style={[styles.meta, { color: colors.muted }]}>{shipment.quantity} unit · dikirim {shipment.shipmentDate}</Text>
+            {shipment.notes ? <Text style={[styles.meta, { color: colors.muted }]}>{shipment.notes}</Text> : null}
+            {shipment.receivedAt ? <Text style={[styles.meta, { color: colors.muted }]}>Diterima {shipment.receivedAt}</Text> : null}
+            {shipment.receivedNotes ? <Text style={[styles.meta, { color: colors.muted }]}>{shipment.receivedNotes}</Text> : null}
+          </View>
+          <Text style={[styles.status, { color: shipment.status === "received" ? colors.success : colors.primary }]}>{statusLabel}</Text>
+        </View>;
+      }) : null}
+    </View>
+  );
 }
-const styles = StyleSheet.create({ container: { borderWidth: 1, borderRadius: 19, padding: 15, marginTop: 14 }, title: { fontSize: 19, fontWeight: "800" }, helper: { fontSize: 12, lineHeight: 18, marginTop: 5 }, label: { fontSize: 12, fontWeight: "800", marginTop: 16, marginBottom: 7 }, shipmentOption: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 12, padding: 11, marginTop: 7 }, copy: { flex: 1 }, name: { fontSize: 13, fontWeight: "800" }, meta: { fontSize: 10, lineHeight: 15, marginTop: 3 }, status: { fontSize: 10, fontWeight: "800", marginLeft: 8 }, empty: { fontSize: 12, lineHeight: 18, paddingVertical: 12 }, selectedCard: { borderWidth: 1, borderRadius: 11, padding: 11, marginTop: 12 }, selectedLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 1 }, selectedText: { fontSize: 13, fontWeight: "800", marginTop: 4 }, input: { minHeight: 46, borderWidth: 1, borderRadius: 11, paddingHorizontal: 12, fontSize: 14 }, notes: { minHeight: 72, paddingTop: 11, textAlignVertical: "top" }, error: { fontSize: 12, lineHeight: 18, marginTop: 12 }, button: { minHeight: 47, borderRadius: 13, alignItems: "center", justifyContent: "center", marginTop: 17 }, buttonText: { fontSize: 14, fontWeight: "800" }, message: { fontSize: 12, fontWeight: "700", marginTop: 11 }, historyTitle: { fontSize: 16, fontWeight: "800", marginTop: 23, marginBottom: 6 }, historyRow: { flexDirection: "row", alignItems: "flex-start", borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 11, marginTop: 5 }, pressed: { opacity: 0.78 },
+
+const styles = StyleSheet.create({
+  container: { borderWidth: 1, borderRadius: 19, padding: 15, marginTop: 14 },
+  title: { fontSize: 19, fontWeight: "800" },
+  helper: { fontSize: 12, lineHeight: 18, marginTop: 5 },
+  state: { fontSize: 12, lineHeight: 18, marginTop: 12 },
+  error: { fontSize: 12, lineHeight: 18, marginTop: 12 },
+  empty: { fontSize: 12, lineHeight: 18, paddingVertical: 12 },
+  copy: { flex: 1 },
+  name: { fontSize: 13, fontWeight: "800" },
+  meta: { fontSize: 10, lineHeight: 15, marginTop: 3 },
+  status: { fontSize: 10, fontWeight: "800", marginLeft: 8 },
+  historyRow: { flexDirection: "row", alignItems: "flex-start", borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 11, marginTop: 5 },
 });
