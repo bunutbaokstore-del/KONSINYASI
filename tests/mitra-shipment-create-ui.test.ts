@@ -32,4 +32,20 @@ describe("Mitra Shipment persistent Create UI contract", () => {
     expect(source).toContain("await utils.supplier.requests.invalidate()");
     expect(source).toContain("createShipment.isPending");
   });
+
+  it("uses the persistent Ship mutation without client-side stock deduction", () => {
+    expect(source).toContain("trpc.mitraShipments.ship.useMutation()");
+    expect(source).toContain("await shipMutation.mutateAsync({ shipmentId: id })");
+    expect(source).toContain('if (status !== "Dikirim")');
+    expect(source).toContain("await utils.mitraProductionStock.list.invalidate()");
+    expect(source).not.toContain("availableStock - quantity");
+    expect(source).not.toContain("availableStock -=");
+  });
+
+  it("keeps Create, READ, and Receiving boundaries intact", () => {
+    expect(source).toContain("trpc.mitraShipments.create.useMutation()");
+    expect(source).toContain("trpc.mitraShipments.list.useQuery()");
+    expect(source).toContain("updateMitraShipmentStatus");
+    expect(source).not.toContain("receive_mitra_shipment");
+  });
 });
