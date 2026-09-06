@@ -21,7 +21,7 @@ export default function SupplierRequestsScreen() {
   if (loading) return <ScreenContainer edges={["top", "bottom", "left", "right"]} className="items-center justify-center"><ActivityIndicator size="large" color={colors.primary} /></ScreenContainer>;
   if (!isAuthenticated || (!isMitra && !isManager)) return <ScreenContainer edges={["top", "bottom", "left", "right"]} className="items-center justify-center px-6"><Text style={[styles.deniedTitle, { color: colors.foreground }]}>Akses tidak tersedia</Text><Text style={[styles.deniedText, { color: colors.muted }]}>Halaman ini hanya tersedia untuk Mitra UMKM, Admin, dan Distributor.</Text><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.secondaryButtonText, { color: colors.primary }]}>Kembali</Text></Pressable></ScreenContainer>;
 
-  return isMitra ? <MitraRequestView colors={colors} requestsQuery={requestsQuery} onBack={() => router.back()} /> : <ManagerReviewView colors={colors} requestsQuery={requestsQuery} onBack={() => router.back()} />;
+  return isMitra ? <MitraRequestView colors={colors} requestsQuery={requestsQuery} onBack={() => router.back()} /> : <ManagerReviewView colors={colors} requestsQuery={requestsQuery} onBack={() => router.back()} canReview={role === "distributor"} />;
 }
 
 type Colors = ReturnType<typeof useColors>;
@@ -77,12 +77,13 @@ function MitraRequestView({ colors, requestsQuery, onBack }: ViewProps) {
   </RequestShell>;
 }
 
-function ManagerReviewView({ colors, requestsQuery, onBack }: ViewProps) {
+function ManagerReviewView({ colors, requestsQuery, onBack, canReview }: ViewProps & { canReview: boolean }) {
   const reviewMutation = trpc.supplier.review.useMutation();
   const [error, setError] = useState<string | null>(null);
   const [pendingReview, setPendingReview] = useState<{ requestId: string; decision: "approved" | "rejected" } | null>(null);
   const activeRequests = ((requestsQuery.data ?? []) as SupplierRequest[]).filter((request) => request.status === "pending");
   const review = (requestId: string, decision: "approved" | "rejected") => {
+    if (!canReview) return;
     setError(null);
     setPendingReview({ requestId, decision });
   };
@@ -100,7 +101,7 @@ function ManagerReviewView({ colors, requestsQuery, onBack }: ViewProps) {
   return <RequestShell colors={colors} title="Persetujuan supplier" subtitle="Periksa pengajuan Mitra UMKM sebelum menjadi data resmi." onBack={onBack}>
     {error ? <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text> : null}
     {pendingReview ? <View style={[styles.confirmCard, { backgroundColor: colors.surface, borderColor: pendingReview.decision === "approved" ? `${colors.primary}55` : `${colors.error}55` }]}><Text style={[styles.confirmTitle, { color: colors.foreground }]}>{pendingReview.decision === "approved" ? "Setujui pengajuan ini?" : "Tolak pengajuan ini?"}</Text><Text style={[styles.confirmText, { color: colors.muted }]}>Keputusan akan dicatat dan pengajuan selesai dipindahkan dari daftar aktif.</Text><View style={styles.confirmActions}><Pressable accessibilityRole="button" accessibilityLabel="Batalkan keputusan" disabled={reviewMutation.isPending} onPress={() => setPendingReview(null)} style={({ pressed }) => [styles.reviewButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.reviewText, { color: colors.muted }]}>Batal</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`${confirmationLabel} pengajuan`} disabled={reviewMutation.isPending} onPress={() => void executeReview()} style={({ pressed }) => [styles.reviewButton, { backgroundColor: pendingReview.decision === "approved" ? colors.primary : colors.error, borderColor: pendingReview.decision === "approved" ? colors.primary : colors.error }, pressed && styles.pressed, reviewMutation.isPending && styles.disabled]}>{reviewMutation.isPending ? <ActivityIndicator color={colors.background} size="small" /> : <Text style={[styles.reviewText, { color: colors.background }]}>{confirmationLabel}</Text>}</Pressable></View></View> : null}
-    <RequestList colors={colors} requests={activeRequests} loading={requestsQuery.isLoading} onRefresh={() => void requestsQuery.refetch()} showActions onReview={review} reviewPending={reviewMutation.isPending} />
+    <RequestList colors={colors} requests={activeRequests} loading={requestsQuery.isLoading} onRefresh={() => void requestsQuery.refetch()} showActions={canReview} onReview={review} reviewPending={reviewMutation.isPending} />
   </RequestShell>;
 }
 
