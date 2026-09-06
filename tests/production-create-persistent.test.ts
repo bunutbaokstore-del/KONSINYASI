@@ -43,9 +43,9 @@ describe("Persistent Production CREATE", () => {
     expect(source).toContain("Produksi berhasil disimpan ke Production Event.");
   });
 
-  it("keeps COMPLETE legacy and does not mutate stock from CREATE", () => {
-    expect(source).toContain("updateMitraProductionResult({");
-    expect(source).not.toContain("trpc.productionEvents.complete.useMutation");
+  it("keeps COMPLETE on the existing persistent mutation and does not mutate stock from CREATE", () => {
+    expect(source).toContain("trpc.productionEvents.complete.useMutation");
+    expect(source).not.toContain("updateMitraProductionResult(");
     expect(source).not.toContain("complete_mitra_production_event");
     expect(source).not.toContain("stockMutation");
     expect(source).not.toContain("stock_movements");

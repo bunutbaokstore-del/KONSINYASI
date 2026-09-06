@@ -15,7 +15,7 @@ import { dateKeyToMonthKey, formatBudgetPeriodSelection, getCalendarMonthDays, i
 import { saveMitraProductionHpp, useMitraProductionHpps } from "@/lib/mitra-production-hpp";
 import type { MitraProductionHpp } from "@/lib/mitra-production-hpp";
 import { filterMitraProductionHistory, getHistoryHpp } from "@/lib/mitra-production-history";
-import { updateMitraProductionResult, type MitraProduction, type ProductionStatus } from "@/lib/mitra-productions";
+import { type MitraProduction, type ProductionStatus } from "@/lib/mitra-productions";
 import { useEffect, useState } from "react";
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -89,6 +89,19 @@ export default function ProductionScreen() {
       setSavedMessage("Produksi berhasil disimpan ke Production Event.");
     },
     onError: (mutationError) => setError(mutationError.message || "Produksi belum dapat disimpan."),
+  });
+  const completeProductionMutation = trpc.productionEvents.complete.useMutation({
+    onSuccess: async () => {
+      await utils.productionEvents.list.invalidate();
+      setSelectedResultId(null);
+      setActualQuantity("");
+      setDamagedQuantity("");
+      setResultNotes("");
+      setError(null);
+      switchView("list");
+      setSavedMessage("Hasil produksi tersimpan ke Production Event.");
+    },
+    onError: (mutationError) => setError(mutationError.message || "Hasil produksi belum dapat disimpan."),
   });
   const selectedProduct = products.find((product) => product.id === selectedProductId) ?? null;
   const budgetProduct = products.find((product) => product.id === budgetProductId) ?? null;
@@ -166,10 +179,8 @@ export default function ProductionScreen() {
       return;
     }
     const percentage = selectedResult.targetQuantity > 0 ? Number(((actual / selectedResult.targetQuantity) * 100).toFixed(2)) : 0;
-    updateMitraProductionResult({ id: selectedResult.id, actualQuantity: actual, damagedQuantity: damaged, yieldPercentage: percentage, resultNotes: resultNotes.trim() });
+    completeProductionMutation.mutate({ eventId: selectedResult.id, actualQuantity: actual, damagedQuantity: damaged, yieldPercentage: percentage, resultNotes: resultNotes.trim() });
     setError(null);
-    setSavedMessage("Hasil produksi tersimpan dan status berubah menjadi Selesai.");
-    switchView("list");
   };
 
   const handleSaveBudget = () => {
@@ -242,7 +253,7 @@ export default function ProductionScreen() {
             ) : view === "budget" ? (
               <BudgetForm colors={colors} products={products} selectedProductId={budgetProductId} onSelectProduct={(id) => { setBudgetProductId(id); setError(null); }} period={budgetPeriod} onSelectPeriod={(value) => { setBudgetPeriod(value); setError(null); }} periodDate={budgetPeriodDate} onPeriodDateChange={(value) => { setBudgetPeriodDate(value); setError(null); }} budgetValue={budgetValue} onBudgetChange={setBudgetValue} target={budgetTarget} onTargetChange={setBudgetTarget} onSave={handleSaveBudget} error={error} savedMessage={savedMessage} savedBudget={savedBudget} />
             ) : view === "results" ? (
-              <ResultForm colors={colors} productions={persistentProductions} productNames={new Map((productsQuery.data ?? []).map((product) => [product.id, product.name]))} selectedProduction={selectedResult} isSelectorOpen={isResultSelectorOpen} onToggleSelector={() => setResultSelectorOpen((open) => !open)} onSelectProduction={(id) => { setSelectedResultId(id); setResultSelectorOpen(false); setError(null); setSavedMessage(null); }} actualQuantity={actualQuantity} onActualChange={setActualQuantity} damagedQuantity={damagedQuantity} onDamagedChange={setDamagedQuantity} resultNotes={resultNotes} onNotesChange={setResultNotes} onSave={handleSaveResult} error={error} savedMessage={savedMessage} />
+              <ResultForm colors={colors} productions={persistentProductions} productNames={new Map((productsQuery.data ?? []).map((product) => [product.id, product.name]))} selectedProduction={selectedResult} isSelectorOpen={isResultSelectorOpen} onToggleSelector={() => setResultSelectorOpen((open) => !open)} onSelectProduction={(id) => { setSelectedResultId(id); setResultSelectorOpen(false); setError(null); setSavedMessage(null); }} actualQuantity={actualQuantity} onActualChange={setActualQuantity} damagedQuantity={damagedQuantity} onDamagedChange={setDamagedQuantity} resultNotes={resultNotes} onNotesChange={setResultNotes} onSave={handleSaveResult} error={error} savedMessage={savedMessage} isSaving={completeProductionMutation.isPending} />
             ) : view === "hpp" ? (
               <MitraHppEditor colors={colors} product={selectedHppProduct} savedHpp={hppProductId ? hpps.get(hppProductId) : undefined} onSave={handleSaveHpp} error={error} message={savedMessage} />
             ) : view === "history" ? (
@@ -269,7 +280,7 @@ export default function ProductionScreen() {
 
 type Colors = ReturnType<typeof useColors>;
 
-function ResultForm({ colors, productions, productNames, selectedProduction, isSelectorOpen, onToggleSelector, onSelectProduction, actualQuantity, onActualChange, damagedQuantity, onDamagedChange, resultNotes, onNotesChange, onSave, error, savedMessage }: { colors: Colors; productions: MitraProduction[]; productNames: Map<string, string>; selectedProduction: MitraProduction | null; isSelectorOpen: boolean; onToggleSelector: () => void; onSelectProduction: (id: string) => void; actualQuantity: string; onActualChange: (value: string) => void; damagedQuantity: string; onDamagedChange: (value: string) => void; resultNotes: string; onNotesChange: (value: string) => void; onSave: () => void; error: string | null; savedMessage: string | null }) {
+function ResultForm({ colors, productions, productNames, selectedProduction, isSelectorOpen, onToggleSelector, onSelectProduction, actualQuantity, onActualChange, damagedQuantity, onDamagedChange, resultNotes, onNotesChange, onSave, error, savedMessage, isSaving }: { colors: Colors; productions: MitraProduction[]; productNames: Map<string, string>; selectedProduction: MitraProduction | null; isSelectorOpen: boolean; onToggleSelector: () => void; onSelectProduction: (id: string) => void; actualQuantity: string; onActualChange: (value: string) => void; damagedQuantity: string; onDamagedChange: (value: string) => void; resultNotes: string; onNotesChange: (value: string) => void; onSave: () => void; error: string | null; savedMessage: string | null; isSaving: boolean }) {
   const productLabel = selectedProduction ? "Produk terpilih dari Daftar Produksi" : "Pilih produksi dari daftar di bawah";
   return <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
     <Text style={[styles.formTitle, { color: colors.foreground }]}>Hasil Produksi</Text>
@@ -292,7 +303,7 @@ function ResultForm({ colors, productions, productNames, selectedProduction, isS
     <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Catatan Hasil <Text style={{ fontWeight: "500", color: colors.muted }}>(opsional)</Text></Text>
     <TextInput value={resultNotes} onChangeText={onNotesChange} placeholder="Tambahkan catatan hasil" placeholderTextColor={colors.muted} multiline style={[styles.input, styles.notesInput, { color: colors.foreground, borderColor: colors.border }]} />
     {error ? <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text> : null}
-    <Pressable accessibilityRole="button" onPress={onSave} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><AppIcon name="verified" size={18} color={colors.background} /><Text style={[styles.saveText, { color: colors.background }]}>Simpan Hasil</Text></Pressable>
+    <Pressable accessibilityRole="button" disabled={isSaving} onPress={onSave} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.primary, opacity: isSaving ? 0.65 : 1 }, pressed && styles.pressed]}><AppIcon name="verified" size={18} color={colors.background} /><Text style={[styles.saveText, { color: colors.background }]}>{isSaving ? "Menyimpan..." : "Simpan Hasil"}</Text></Pressable>
     {savedMessage ? <Message text={savedMessage} colors={colors} /> : null}
   </View>;
 }
