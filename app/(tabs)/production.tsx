@@ -7,6 +7,7 @@ import { DistributorShipmentReceiving } from "@/components/distributor-shipment-
 import { MitraStockRecap } from "@/components/mitra-stock-recap";
 import { AppIcon } from "@/components/ui/app-icon";
 import { useColors } from "@/hooks/use-colors";
+import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/hooks/use-auth";
 import { formatProductPrice, useMitraProducts } from "@/lib/mitra-products";
 import { saveMitraProductionBudget, type BudgetPeriod, useMitraProductionBudgets } from "@/lib/mitra-production-budgets";
@@ -14,7 +15,7 @@ import { dateKeyToMonthKey, formatBudgetPeriodSelection, getCalendarMonthDays, i
 import { saveMitraProductionHpp, useMitraProductionHpps } from "@/lib/mitra-production-hpp";
 import type { MitraProductionHpp } from "@/lib/mitra-production-hpp";
 import { filterMitraProductionHistory, getHistoryHpp } from "@/lib/mitra-production-history";
-import { saveMitraProduction, updateMitraProductionResult, useMitraProductions, type MitraProduction, type ProductionStatus } from "@/lib/mitra-productions";
+import { saveMitraProduction, updateMitraProductionResult, type MitraProduction, type ProductionStatus } from "@/lib/mitra-productions";
 import { useEffect, useState } from "react";
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -34,7 +35,21 @@ export default function ProductionScreen() {
   const { user } = useAuth();
   const isDistributor = user?.role === "distributor";
   const products = useMitraProducts();
-  const productions = useMitraProductions();
+  const productionEventsQuery = trpc.productionEvents.list.useQuery();
+  const productions: MitraProduction[] = (productionEventsQuery.data ?? []).map((event) => ({
+    id: event.id,
+    productId: event.productId,
+    productionDate: event.productionDate,
+    budgetPeriod: event.budgetPeriod as BudgetPeriod,
+    targetQuantity: event.targetQuantity,
+    actualQuantity: event.actualQuantity,
+    damagedQuantity: event.damagedQuantity,
+    yieldPercentage: event.yieldPercentage,
+    notes: event.notes,
+    resultNotes: event.resultNotes,
+    status: event.status === "completed" ? "Selesai" : "Direncanakan",
+    createdAt: event.createdAt,
+  }));
   const budgets = useMitraProductionBudgets();
   const hpps = useMitraProductionHpps();
   const [view, setView] = useState<ProductionView>("list");
@@ -183,7 +198,7 @@ export default function ProductionScreen() {
 
   return (
     <ScreenContainer className="px-5">
-      <FlatList<ReturnType<typeof useMitraProductions>[number] | ReturnType<typeof useMitraProducts>[number]>
+      <FlatList<MitraProduction | ReturnType<typeof useMitraProducts>[number]>
         data={view === "budget" || view === "hpp" ? products : view === "history" ? historyProductions : view === "stock" || view === "recap" || view === "shipment" || view === "receiving" ? [] : productions}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
@@ -210,6 +225,8 @@ export default function ProductionScreen() {
               {isDistributor ? <Pressable accessibilityRole="button" onPress={() => switchView("receiving")} style={[styles.segmentButton, view === "receiving" && { backgroundColor: colors.primary }]}><Text style={[styles.segmentText, { color: view === "receiving" ? colors.background : colors.muted }]}>Penerimaan</Text></Pressable> : null}
             </View>
             </ScrollView>
+            {productionEventsQuery.isLoading ? <Text style={[styles.helper, { color: colors.muted }]}>Memuat data produksi...</Text> : null}
+            {productionEventsQuery.isError ? <Text style={[styles.errorText, { color: colors.error }]}>{productionEventsQuery.error.message || "Data produksi belum dapat dimuat."}</Text> : null}
             {view === "list" ? (
               <>
                 <Pressable accessibilityRole="button" onPress={() => { setProductionFormVisible((visible) => !visible); setError(null); setSavedMessage(null); }} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary }, pressed && styles.pressed]}><AppIcon name={isProductionFormVisible ? "close" : "add"} size={20} color={colors.background} /><Text style={[styles.primaryActionText, { color: colors.background }]}>{isProductionFormVisible ? "Tutup Form" : "Tambah Produksi"}</Text></Pressable>
@@ -280,7 +297,7 @@ function ProductionSelectOption({ production, productName, selected, onSelect, c
 }
 
 
-function ProductionHistoryHeader({ colors, products, productions, productFilter, dateFilter, onProductFilter, onDateFilter, count }: { colors: Colors; products: ReturnType<typeof useMitraProducts>; productions: ReturnType<typeof useMitraProductions>; productFilter: string; dateFilter: string; onProductFilter: (value: string) => void; onDateFilter: (value: string) => void; count: number }) {
+function ProductionHistoryHeader({ colors, products, productions, productFilter, dateFilter, onProductFilter, onDateFilter, count }: { colors: Colors; products: ReturnType<typeof useMitraProducts>; productions: MitraProduction[]; productFilter: string; dateFilter: string; onProductFilter: (value: string) => void; onDateFilter: (value: string) => void; count: number }) {
   const dates = Array.from(new Set(productions.map((production) => production.productionDate))).sort().reverse();
   return <View style={[styles.historyPanel, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.formTitle, { color: colors.foreground }]}>Riwayat Produksi</Text><Text style={[styles.helper, { color: colors.muted }]}>Data diambil dari Daftar Produksi + Hasil Produksi yang sama.</Text><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Filter Produk</Text><View style={styles.filterWrap}><FilterChip label="Semua Produk" selected={productFilter === "all"} onPress={() => onProductFilter("all")} colors={colors} />{products.map((product) => <FilterChip key={product.id} label={product.name} selected={productFilter === product.id} onPress={() => onProductFilter(product.id)} colors={colors} />)}</View><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Filter Tanggal</Text><View style={styles.filterWrap}><FilterChip label="Semua Tanggal" selected={dateFilter === "all"} onPress={() => onDateFilter("all")} colors={colors} />{dates.map((date) => <FilterChip key={date} label={date} selected={dateFilter === date} onPress={() => onDateFilter(date)} colors={colors} />)}</View><View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Riwayat Produksi</Text><Text style={[styles.countText, { color: colors.muted }]}>{count} catatan</Text></View></View>;
 }
@@ -364,7 +381,7 @@ function BudgetProductOption({ product, selected, onSelect, colors, compact = fa
   return <Pressable accessibilityRole="button" accessibilityLabel={`Pilih produk ${product.name}`} onPress={onSelect} style={({ pressed }) => [styles.productOption, compact && styles.compactProductOption, { backgroundColor: colors.surface, borderColor: selected ? colors.primary : colors.border }, pressed && styles.pressed]}><View style={[styles.productIcon, compact && styles.compactProductIcon, { backgroundColor: `${colors.primary}18` }]}><AppIcon name="shippingbox" size={compact ? 18 : 21} color={colors.primary} /></View><View style={styles.productCopy}><Text style={[styles.productName, compact && styles.compactProductName, { color: colors.foreground }]}>{product.name}</Text><Text style={[styles.productMeta, { color: colors.muted }]}>{product.category} · {product.unit} · {product.size}</Text></View>{selected ? <AppIcon name="verified" size={20} color={colors.primary} /> : null}</Pressable>;
 }
 
-function ProductionCard({ production, productName, colors }: { production: ReturnType<typeof useMitraProductions>[number]; productName: string; colors: Colors }) {
+function ProductionCard({ production, productName, colors }: { production: MitraProduction; productName: string; colors: Colors }) {
   const status: ProductionStatus = production.status;
   return <View style={[styles.productionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.productionTop}><View style={styles.productionTitleCopy}><Text style={[styles.productionName, { color: colors.foreground }]}>{productName}</Text><Text style={[styles.productionDate, { color: colors.muted }]}>Tanggal produksi: {production.productionDate}</Text></View><View style={[styles.statusBadge, { backgroundColor: status === "Direncanakan" ? `${colors.warning}18` : `${colors.success}18` }]}><Text style={[styles.statusText, { color: status === "Direncanakan" ? colors.warning : colors.success }]}>{status}</Text></View></View><View style={styles.detailGrid}><Detail label="Target Produksi" value={`${production.targetQuantity} unit`} colors={colors} /><Detail label="Jumlah Produksi" value={`${production.actualQuantity ?? "-"} unit`} colors={colors} /><Detail label="Periode Anggaran" value={production.budgetPeriod} colors={colors} /><Detail label="Hasil Aktual" value={production.actualQuantity === null ? "Belum tersedia" : `${production.actualQuantity} unit`} colors={colors} /></View>{production.notes ? <Text style={[styles.notes, { color: colors.muted }]}>Catatan: {production.notes}</Text> : null}</View>;
 }
