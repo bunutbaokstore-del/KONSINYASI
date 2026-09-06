@@ -36,7 +36,8 @@ export default function ProductionScreen() {
   const isDistributor = user?.role === "distributor";
   const products = useMitraProducts();
   const productionEventsQuery = trpc.productionEvents.list.useQuery();
-  const productions: MitraProduction[] = (productionEventsQuery.data ?? []).map((event) => ({
+  const productsQuery = trpc.products.list.useQuery();
+  const persistentProductions: MitraProduction[] = (productionEventsQuery.data ?? []).map((event) => ({
     id: event.id,
     productId: event.productId,
     productionDate: event.productionDate,
@@ -78,9 +79,9 @@ export default function ProductionScreen() {
   const budgetForProduction = selectedProductId ? budgets.get(`${selectedProductId}:${period}`) : undefined;
   const budgetProduct = products.find((product) => product.id === budgetProductId) ?? null;
   const savedBudget = budgetProductId ? budgets.get(`${budgetProductId}:${budgetPeriod}`) : undefined;
-  const selectedResult = productions.find((production) => production.id === selectedResultId) ?? null;
+  const selectedResult = persistentProductions.find((production) => production.id === selectedResultId) ?? null;
   const selectedHppProduct = products.find((product) => product.id === hppProductId) ?? null;
-  const historyProductions = filterMitraProductionHistory(productions, { productId: historyProductFilter === "all" ? undefined : historyProductFilter, productionDate: historyDateFilter === "all" ? undefined : historyDateFilter });
+  const historyProductions = filterMitraProductionHistory(persistentProductions, { productId: historyProductFilter === "all" ? undefined : historyProductFilter, productionDate: historyDateFilter === "all" ? undefined : historyDateFilter });
 
   useEffect(() => {
     if (!budgetProductId) return;
@@ -199,7 +200,7 @@ export default function ProductionScreen() {
   return (
     <ScreenContainer className="px-5">
       <FlatList<MitraProduction | ReturnType<typeof useMitraProducts>[number]>
-        data={view === "budget" || view === "hpp" ? products : view === "history" ? historyProductions : view === "stock" || view === "recap" || view === "shipment" || view === "receiving" ? [] : productions}
+        data={view === "budget" || view === "hpp" ? products : view === "results" ? persistentProductions : view === "history" ? historyProductions : view === "list" ? persistentProductions : view === "stock" || view === "recap" || view === "shipment" || view === "receiving" ? [] : persistentProductions}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
@@ -232,16 +233,16 @@ export default function ProductionScreen() {
                 <Pressable accessibilityRole="button" onPress={() => { setProductionFormVisible((visible) => !visible); setError(null); setSavedMessage(null); }} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary }, pressed && styles.pressed]}><AppIcon name={isProductionFormVisible ? "close" : "add"} size={20} color={colors.background} /><Text style={[styles.primaryActionText, { color: colors.background }]}>{isProductionFormVisible ? "Tutup Form" : "Tambah Produksi"}</Text></Pressable>
                 {isProductionFormVisible ? <ProductionForm colors={colors} products={products} selectedProductId={selectedProductId} onSelectProduct={selectProductionProduct} period={period} onSelectPeriod={(value) => { setPeriod(value); setError(null); }} productionDate={productionDate} onDateChange={setProductionDate} productionQuantity={productionQuantity} onQuantityChange={setProductionQuantity} notes={notes} onNotesChange={setNotes} target={budgetForProduction?.productionTarget ?? null} onSave={handleSaveProduction} error={error} /> : null}
                 {savedMessage ? <Message text={savedMessage} colors={colors} /> : null}
-                <View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Daftar Produksi</Text><Text style={[styles.countText, { color: colors.muted }]}>{productions.length} produksi</Text></View>
+                <View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Daftar Produksi</Text><Text style={[styles.countText, { color: colors.muted }]}>{persistentProductions.length} produksi</Text></View>
               </>
             ) : view === "budget" ? (
               <BudgetForm colors={colors} products={products} selectedProductId={budgetProductId} onSelectProduct={(id) => { setBudgetProductId(id); setError(null); }} period={budgetPeriod} onSelectPeriod={(value) => { setBudgetPeriod(value); setError(null); }} periodDate={budgetPeriodDate} onPeriodDateChange={(value) => { setBudgetPeriodDate(value); setError(null); }} budgetValue={budgetValue} onBudgetChange={setBudgetValue} target={budgetTarget} onTargetChange={setBudgetTarget} onSave={handleSaveBudget} error={error} savedMessage={savedMessage} savedBudget={savedBudget} />
             ) : view === "results" ? (
-              <ResultForm colors={colors} productions={productions} productNames={new Map(products.map((product) => [product.id, product.name]))} selectedProduction={selectedResult} isSelectorOpen={isResultSelectorOpen} onToggleSelector={() => setResultSelectorOpen((open) => !open)} onSelectProduction={(id) => { setSelectedResultId(id); setResultSelectorOpen(false); setError(null); setSavedMessage(null); }} actualQuantity={actualQuantity} onActualChange={setActualQuantity} damagedQuantity={damagedQuantity} onDamagedChange={setDamagedQuantity} resultNotes={resultNotes} onNotesChange={setResultNotes} onSave={handleSaveResult} error={error} savedMessage={savedMessage} />
+              <ResultForm colors={colors} productions={persistentProductions} productNames={new Map((productsQuery.data ?? []).map((product) => [product.id, product.name]))} selectedProduction={selectedResult} isSelectorOpen={isResultSelectorOpen} onToggleSelector={() => setResultSelectorOpen((open) => !open)} onSelectProduction={(id) => { setSelectedResultId(id); setResultSelectorOpen(false); setError(null); setSavedMessage(null); }} actualQuantity={actualQuantity} onActualChange={setActualQuantity} damagedQuantity={damagedQuantity} onDamagedChange={setDamagedQuantity} resultNotes={resultNotes} onNotesChange={setResultNotes} onSave={handleSaveResult} error={error} savedMessage={savedMessage} />
             ) : view === "hpp" ? (
               <MitraHppEditor colors={colors} product={selectedHppProduct} savedHpp={hppProductId ? hpps.get(hppProductId) : undefined} onSave={handleSaveHpp} error={error} message={savedMessage} />
             ) : view === "history" ? (
-              <ProductionHistoryHeader colors={colors} products={products} productions={productions} productFilter={historyProductFilter} dateFilter={historyDateFilter} onProductFilter={setHistoryProductFilter} onDateFilter={setHistoryDateFilter} count={historyProductions.length} />
+              <ProductionHistoryHeader colors={colors} products={productsQuery.data ?? []} productions={persistentProductions} productFilter={historyProductFilter} dateFilter={historyDateFilter} onProductFilter={setHistoryProductFilter} onDateFilter={setHistoryDateFilter} count={historyProductions.length} />
             ) : view === "stock" ? (
               <MitraProductionStock />
             ) : view === "recap" ? (
@@ -255,7 +256,7 @@ export default function ProductionScreen() {
             )}
           </View>
         }
-        renderItem={({ item }) => "productId" in item ? view === "results" ? <ProductionSelectOption production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} selected={item.id === selectedResultId} onSelect={() => { setSelectedResultId(item.id); setResultSelectorOpen(false); setError(null); setSavedMessage(null); }} colors={colors} /> : view === "history" ? <HistoryCard production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} hpp={getHistoryHpp(hpps, item.productId)} colors={colors} /> : <ProductionCard production={item} productName={products.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} colors={colors} /> : <BudgetProductOption product={item} selected={view === "hpp" ? item.id === hppProductId : item.id === budgetProductId} onSelect={() => { if (view === "hpp") { setHppProductId(item.id); } else { setBudgetProductId(item.id); } setError(null); setSavedMessage(null); }} colors={colors} />}
+        renderItem={({ item }) => "productId" in item ? view === "results" ? <ProductionSelectOption production={item} productName={productsQuery.data?.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} selected={item.id === selectedResultId} onSelect={() => { setSelectedResultId(item.id); setResultSelectorOpen(false); setError(null); setSavedMessage(null); }} colors={colors} /> : view === "history" ? <HistoryCard production={item} productName={productsQuery.data?.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} hpp={getHistoryHpp(hpps, item.productId)} colors={colors} /> : <ProductionCard production={item} productName={productsQuery.data?.find((product) => product.id === item.productId)?.name ?? "Produk tidak ditemukan"} colors={colors} /> : <BudgetProductOption product={item} selected={view === "hpp" ? item.id === hppProductId : item.id === budgetProductId} onSelect={() => { if (view === "hpp") { setHppProductId(item.id); } else { setBudgetProductId(item.id); } setError(null); setSavedMessage(null); }} colors={colors} />}
         ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.muted }]}>{view === "list" ? "Belum ada produksi. Tekan Tambah Produksi untuk membuat rencana baru." : view === "results" ? "Belum ada produksi dari Daftar Produksi." : view === "history" ? "Belum ada riwayat sesuai filter." : view === "stock" || view === "recap" ? "Belum ada stok hasil produksi." : view === "shipment" ? "Belum ada pengiriman." : view === "receiving" ? "Belum ada penerimaan." : "Belum ada produk. Tambahkan produk dari menu Produk."}</Text>}
       />
     </ScreenContainer>
@@ -297,7 +298,7 @@ function ProductionSelectOption({ production, productName, selected, onSelect, c
 }
 
 
-function ProductionHistoryHeader({ colors, products, productions, productFilter, dateFilter, onProductFilter, onDateFilter, count }: { colors: Colors; products: ReturnType<typeof useMitraProducts>; productions: MitraProduction[]; productFilter: string; dateFilter: string; onProductFilter: (value: string) => void; onDateFilter: (value: string) => void; count: number }) {
+function ProductionHistoryHeader({ colors, products, productions, productFilter, dateFilter, onProductFilter, onDateFilter, count }: { colors: Colors; products: { id: string; name: string }[]; productions: MitraProduction[]; productFilter: string; dateFilter: string; onProductFilter: (value: string) => void; onDateFilter: (value: string) => void; count: number }) {
   const dates = Array.from(new Set(productions.map((production) => production.productionDate))).sort().reverse();
   return <View style={[styles.historyPanel, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.formTitle, { color: colors.foreground }]}>Riwayat Produksi</Text><Text style={[styles.helper, { color: colors.muted }]}>Data diambil dari Daftar Produksi + Hasil Produksi yang sama.</Text><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Filter Produk</Text><View style={styles.filterWrap}><FilterChip label="Semua Produk" selected={productFilter === "all"} onPress={() => onProductFilter("all")} colors={colors} />{products.map((product) => <FilterChip key={product.id} label={product.name} selected={productFilter === product.id} onPress={() => onProductFilter(product.id)} colors={colors} />)}</View><Text style={[styles.fieldLabel, { color: colors.foreground }]}>Filter Tanggal</Text><View style={styles.filterWrap}><FilterChip label="Semua Tanggal" selected={dateFilter === "all"} onPress={() => onDateFilter("all")} colors={colors} />{dates.map((date) => <FilterChip key={date} label={date} selected={dateFilter === date} onPress={() => onDateFilter(date)} colors={colors} />)}</View><View style={styles.sectionHeader}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Riwayat Produksi</Text><Text style={[styles.countText, { color: colors.muted }]}>{count} catatan</Text></View></View>;
 }
