@@ -91,7 +91,44 @@ async function signIn(user: FixtureUser) {
   expect(data.session?.access_token).toBeTruthy();
   return userClient(data.session!.access_token);
 }
+async function cleanupFixtureUsers(client: SupabaseClient, users: FixtureUser[]) {
+  const usersWithIds = users.filter(
+    (user): user is FixtureUser & { id: string } => Boolean(user.id),
+  );
 
+  if (usersWithIds.length === 0) return;
+
+  const cleanupErrors: string[] = [];
+  const userIds = usersWithIds.map((user) => user.id);
+
+  const { error: profileError } = await client
+    .from("user_profiles")
+    .delete()
+    .in("user_id", userIds);
+
+  if (profileError) {
+    cleanupErrors.push(`user_profiles cleanup failed: ${profileError.message}`);
+  }
+
+  for (const user of [...usersWithIds].reverse()) {
+    const { error: deleteError } = await client.auth.admin.deleteUser(user.id);
+
+    if (deleteError) {
+      cleanupErrors.push(
+        `auth user cleanup failed for ${user.email}: ${deleteError.message}`,
+      );
+    }
+  }
+
+  if (cleanupErrors.length > 0) {
+    throw new Error(cleanupErrors.join("; "));
+  }
+
+  for (const user of users) {
+    user.id = undefined;
+    user.distributorId = undefined;
+  }
+}
 describe.skipIf(!RUN_LOCAL)("LOCAL two-tenant isolation fixture", () => {
   const admin = RUN_LOCAL ? adminClient() : null;
 
@@ -106,23 +143,22 @@ describe.skipIf(!RUN_LOCAL)("LOCAL two-tenant isolation fixture", () => {
       await provisionUser(admin!, fixture[4], fixture[0].id);
       await provisionUser(admin!, fixture[5], fixture[1].id);
     } catch (error) {
-      for (const user of fixture) {
-        if (user.id) {
-          await admin!.auth.admin.deleteUser(user.id);
-          user.id = undefined;
-          user.distributorId = undefined;
-        }
-      }
-      throw error;
-    }
+  try {
+    await cleanupFixtureUsers(admin!, fixture);
+  } catch (cleanupError) {
+    throw new AggregateError(
+      [error, cleanupError],
+      "Fixture setup and cleanup failed",
+    );
+  }
+  throw error;
+}
   });
 
   afterAll(async () => {
-    if (!admin) return;
-    for (const user of fixture) {
-      if (user.id) await admin.auth.admin.deleteUser(user.id);
-    }
-  });
+  if (!admin) return;
+  await cleanupFixtureUsers(admin, fixture);
+});
 
   it("provisions two isolated Distributor - Admin - Mitra trees", () => {
     expect(fixture[0].distributorId).toBe(fixture[0].id);
