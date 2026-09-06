@@ -7,7 +7,7 @@ import { getBearerToken, getDistributorId, getSupabaseAdminClient, getSupabasePu
 import { TRPCError } from "@trpc/server";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { KTP_CONTENT_TYPES } from "../shared/user-profile";
-import { getStockStatus, summarizeStock, type ConsignmentItem } from "../shared/consignment";
+import { getStockStatus, summarizeStock } from "../shared/consignment";
 import { z } from "zod";
 
 const roleSchema = z.enum(["distributor", "admin", "mitra_umkm", "supervisor", "sales_motoris", "hrd"]);
@@ -1138,7 +1138,7 @@ export const appRouter = router({
 
       const { data, error } = await getSupabaseAdminClient()
         .from("consignment_items")
-        .select("id, name, sku, unit, stock_quantity, minimum_stock, updated_at")
+        .select("id, product_id, name, sku, unit, stock_quantity, minimum_stock, updated_at, product:products(id, name, sku, unit, lifecycle_status)")
         .eq("mitra_user_id", ctx.supabaseUser.id)
         .eq("distributor_id", distributorId)
         .order("updated_at", { ascending: false });
@@ -1149,6 +1149,7 @@ export const appRouter = router({
 
       const items = (data ?? []).map((item) => ({
         id: item.id,
+        productId: item.product_id ?? null,
         name: item.name,
         sku: item.sku ?? null,
         unit: item.unit,
@@ -1156,9 +1157,14 @@ export const appRouter = router({
         minimumStock: item.minimum_stock,
         status: getStockStatus(item.stock_quantity, item.minimum_stock),
         updatedAt: item.updated_at,
-      })) as ConsignmentItem[];
+        productName: item.product?.[0]?.name ?? null,
+        productSku: item.product?.[0]?.sku ?? null,
+        productUnit: item.product?.[0]?.unit ?? null,
+      }));
 
-      return { items, summary: summarizeStock(items) };
+      const stockChangeItems = items.filter((item) => item.productId && item.productName);
+
+      return { items, stockChangeItems, summary: summarizeStock(items) };
     }),
   }),
 });
