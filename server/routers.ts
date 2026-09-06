@@ -1023,6 +1023,53 @@ export const appRouter = router({
         return toProductionEvent(data);
       }),
   }),
+  mitraProductionStock: router({
+    list: supabaseProtectedProcedure.query(async ({ ctx }) => {
+      const role = callerRole(ctx);
+      if (role !== "mitra_umkm" && role !== "distributor" && role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Role ini tidak dapat melihat stok hasil produksi." });
+      }
+
+      const distributorId = getDistributorId(ctx.supabaseUser);
+      if (!distributorId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja stok hasil produksi tidak ditemukan." });
+      }
+
+      let query = getSupabaseAdminClient()
+        .from("mitra_production_stock")
+        .select("id, distributor_id, mitra_user_id, product_id, available_quantity, created_at, updated_at, product:products(id, distributor_id, created_by_mitra_user_id, name, sku, unit, lifecycle_status, created_at, updated_at)")
+        .eq("distributor_id", distributorId)
+        .order("updated_at", { ascending: false });
+      if (role === "mitra_umkm") query = query.eq("mitra_user_id", ctx.supabaseUser!.id);
+
+      const { data, error } = await query;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Stok hasil produksi belum dapat dimuat." });
+
+      return (data ?? []).map((row) => {
+        const product = row.product?.[0] ?? null;
+        return {
+          id: row.id,
+          distributorId: row.distributor_id,
+          mitraUserId: row.mitra_user_id,
+          productId: row.product_id,
+          availableQuantity: row.available_quantity,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          product: product ? {
+            id: product.id,
+            distributorId: product.distributor_id,
+            createdByMitraUserId: product.created_by_mitra_user_id,
+            name: product.name,
+            sku: product.sku,
+            unit: product.unit,
+            lifecycleStatus: product.lifecycle_status,
+            createdAt: product.created_at,
+            updatedAt: product.updated_at,
+          } : null,
+        };
+      });
+    }),
+  }),
   productApproval: router({
     notifyDistributor: supabaseProtectedProcedure
       .input(z.object({
