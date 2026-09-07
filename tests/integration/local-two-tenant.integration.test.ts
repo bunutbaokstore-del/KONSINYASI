@@ -523,7 +523,52 @@ describe.skipIf(!RUN_LOCAL)("LOCAL two-tenant isolation fixture", () => {
     expect(distributorAData).toHaveLength(1);
     expect(distributorBData).toHaveLength(0);
   });
+  it("isolates notifications by Mitra and Distributor tenant", async () => {
+    const { data: notification, error: notificationError } = await admin!
+      .from("notifications")
+      .insert({
+        recipient_user_id: fixture[3].id,
+        distributor_id: fixture[1].id,
+        title: "RLS NOTIFICATION FIXTURE",
+        body: "RLS isolation test",
+        notification_type: "request_approved",
+      })
+      .select("id")
+      .single();
 
+    expect(notificationError).toBeNull();
+    expect(notification).not.toBeNull();
+
+    const mitraA = await signIn(fixture[3]);
+    const mitraB = await signIn(fixture[4]);
+    const distributorA = await signIn(fixture[1]);
+    const distributorB = await signIn(fixture[0]);
+
+    const { data: mitraAData } = await mitraA
+      .from("notifications")
+      .select("id")
+      .eq("id", notification!.id);
+
+    const { data: mitraBData } = await mitraB
+      .from("notifications")
+      .select("id")
+      .eq("id", notification!.id);
+
+    const { data: distributorAData } = await distributorA
+      .from("notifications")
+      .select("id")
+      .eq("id", notification!.id);
+
+    const { data: distributorBData } = await distributorB
+      .from("notifications")
+      .select("id")
+      .eq("id", notification!.id);
+
+    expect(mitraAData).toHaveLength(1);
+    expect(mitraBData).toHaveLength(0);
+    expect(distributorAData).toHaveLength(1);
+    expect(distributorBData).toHaveLength(0);
+  });
   it("denies sysadmin from reading a consignment item when distributor_id equals sysadmin UUID", async () => {
     const sysadminEmail = "auth32e-sysadmin-regression@example.local";
     const sysadminPassword = "LocalOnly-E2!safe";
