@@ -412,9 +412,37 @@ expect(approvedNotifications?.[0]).toMatchObject({
     await expect(distributorCaller.supplier.review({ requestId, decision: "approved", reviewNote: "approved decrease" })).resolves.toMatchObject({ status: "approved" });
     const { data: item } = await admin.from("consignment_items").select("stock_quantity").eq("id", itemId).single();
     expect(item?.stock_quantity).toBe(4);
-    const { data: movements } = await admin.from("stock_movements").select("movement_type, previous_stock, change_quantity, resulting_stock").eq("request_id", requestId);
+    const { data: movements } = await admin
+      .from("stock_movements")
+      .select("movement_type, previous_stock, change_quantity, resulting_stock, request_id, item_id, mitra_user_id, distributor_id, approved_by")
+      .eq("request_id", requestId);
     expect(movements).toHaveLength(1);
-    expect(movements?.[0]).toMatchObject({ movement_type: "supplier_stock_change", previous_stock: 10, change_quantity: -6, resulting_stock: 4 });
+    expect(movements?.[0]).toMatchObject({
+      movement_type: "supplier_stock_change",
+      previous_stock: 10,
+      change_quantity: -6,
+      resulting_stock: 4,
+      request_id: requestId,
+      item_id: itemId,
+      mitra_user_id: fixture[3].id,
+      distributor_id: fixture[0].id,
+      approved_by: fixture[0].id,
+    });
+    const { data: notifications, error: notificationError } = await admin
+      .from("notifications")
+      .select("notification_type, recipient_user_id, request_id, distributor_id")
+      .eq("request_id", requestId)
+      .eq("notification_type", "request_approved")
+      .eq("recipient_user_id", fixture[3].id)
+      .eq("distributor_id", fixture[0].id);
+    expect(notificationError).toBeNull();
+    expect(notifications).toHaveLength(1);
+    expect(notifications?.[0]).toMatchObject({
+      notification_type: "request_approved",
+      recipient_user_id: fixture[3].id,
+      request_id: requestId,
+      distributor_id: fixture[0].id,
+    });
   });
 
   it("approves stock_change with unchanged quantity and records a zero delta", async () => {
