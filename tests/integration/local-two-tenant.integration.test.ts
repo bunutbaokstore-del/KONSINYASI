@@ -6,8 +6,13 @@ const LOCAL_URL = process.env.SUPABASE_LOCAL_URL ?? "http://127.0.0.1:54321";
 const LOCAL_ANON_KEY = process.env.SUPABASE_LOCAL_ANON_KEY;
 const LOCAL_SERVICE_ROLE_KEY = process.env.SUPABASE_LOCAL_SERVICE_ROLE_KEY;
 
-if (!LOCAL_URL.startsWith("http://127.0.0.1:" ) && !LOCAL_URL.startsWith("http://localhost:" )) {
-  throw new Error("local-two-tenant integration test refuses a non-local SUPABASE_LOCAL_URL");
+if (
+  !LOCAL_URL.startsWith("http://127.0.0.1:") &&
+  !LOCAL_URL.startsWith("http://localhost:")
+) {
+  throw new Error(
+    "local-two-tenant integration test refuses a non-local SUPABASE_LOCAL_URL",
+  );
 }
 
 type FixtureUser = {
@@ -19,18 +24,47 @@ type FixtureUser = {
 };
 
 const fixture: FixtureUser[] = [
-  { email: "auth28a-d1@example.local", password: "LocalOnly-A1!safe", role: "distributor" },
-  { email: "auth28a-d2@example.local", password: "LocalOnly-A2!safe", role: "distributor" },
-  { email: "auth28a-admin-d1@example.local", password: "LocalOnly-B1!safe", role: "admin" },
-  { email: "auth28a-admin-d2@example.local", password: "LocalOnly-B2!safe", role: "admin" },
-  { email: "auth28a-mitra-d1@example.local", password: "LocalOnly-C1!safe", role: "mitra_umkm" },
-  { email: "auth28a-mitra-d2@example.local", password: "LocalOnly-C2!safe", role: "mitra_umkm" },
+  {
+    email: "auth28a-d1@example.local",
+    password: "LocalOnly-A1!safe",
+    role: "distributor",
+  },
+  {
+    email: "auth28a-d2@example.local",
+    password: "LocalOnly-A2!safe",
+    role: "distributor",
+  },
+  {
+    email: "auth28a-admin-d1@example.local",
+    password: "LocalOnly-B1!safe",
+    role: "admin",
+  },
+  {
+    email: "auth28a-admin-d2@example.local",
+    password: "LocalOnly-B2!safe",
+    role: "admin",
+  },
+  {
+    email: "auth28a-mitra-d1@example.local",
+    password: "LocalOnly-C1!safe",
+    role: "mitra_umkm",
+  },
+  {
+    email: "auth28a-mitra-d2@example.local",
+    password: "LocalOnly-C2!safe",
+    role: "mitra_umkm",
+  },
 ];
 
 function assertLocalTestConfiguration() {
-  if (!RUN_LOCAL) throw new Error("Set RUN_LOCAL_TWO_TENANT=1 to run the local-only integration fixture");
+  if (!RUN_LOCAL)
+    throw new Error(
+      "Set RUN_LOCAL_TWO_TENANT=1 to run the local-only integration fixture",
+    );
   if (!LOCAL_ANON_KEY || !LOCAL_SERVICE_ROLE_KEY) {
-    throw new Error("SUPABASE_LOCAL_ANON_KEY and SUPABASE_LOCAL_SERVICE_ROLE_KEY are required");
+    throw new Error(
+      "SUPABASE_LOCAL_ANON_KEY and SUPABASE_LOCAL_SERVICE_ROLE_KEY are required",
+    );
   }
 }
 
@@ -49,7 +83,11 @@ function userClient(accessToken: string): SupabaseClient {
   });
 }
 
-async function provisionUser(client: SupabaseClient, user: FixtureUser, distributorId?: string) {
+async function provisionUser(
+  client: SupabaseClient,
+  user: FixtureUser,
+  distributorId?: string,
+) {
   const { data, error } = await client.auth.admin.createUser({
     email: user.email,
     password: user.password,
@@ -86,12 +124,18 @@ async function signIn(user: FixtureUser) {
   const client = createClient(LOCAL_URL, LOCAL_ANON_KEY!, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  const { data, error } = await client.auth.signInWithPassword({ email: user.email, password: user.password });
+  const { data, error } = await client.auth.signInWithPassword({
+    email: user.email,
+    password: user.password,
+  });
   expect(error).toBeNull();
   expect(data.session?.access_token).toBeTruthy();
   return userClient(data.session!.access_token);
 }
-async function cleanupFixtureUsers(client: SupabaseClient, users: FixtureUser[]) {
+async function cleanupFixtureUsers(
+  client: SupabaseClient,
+  users: FixtureUser[],
+) {
   const usersWithIds = users.filter(
     (user): user is FixtureUser & { id: string } => Boolean(user.id),
   );
@@ -143,22 +187,22 @@ describe.skipIf(!RUN_LOCAL)("LOCAL two-tenant isolation fixture", () => {
       await provisionUser(admin!, fixture[4], fixture[0].id);
       await provisionUser(admin!, fixture[5], fixture[1].id);
     } catch (error) {
-  try {
-    await cleanupFixtureUsers(admin!, fixture);
-  } catch (cleanupError) {
-    throw new AggregateError(
-      [error, cleanupError],
-      "Fixture setup and cleanup failed",
-    );
-  }
-  throw error;
-}
+      try {
+        await cleanupFixtureUsers(admin!, fixture);
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          "Fixture setup and cleanup failed",
+        );
+      }
+      throw error;
+    }
   });
 
   afterAll(async () => {
-  if (!admin) return;
-  await cleanupFixtureUsers(admin, fixture);
-});
+    if (!admin) return;
+    await cleanupFixtureUsers(admin, fixture);
+  });
 
   it("provisions two isolated Distributor - Admin - Mitra trees", () => {
     expect(fixture[0].distributorId).toBe(fixture[0].id);
@@ -172,17 +216,29 @@ describe.skipIf(!RUN_LOCAL)("LOCAL two-tenant isolation fixture", () => {
   it("allows each Distributor to read only its own tenant profiles", async () => {
     const d1 = await signIn(fixture[0]);
     const d2 = await signIn(fixture[1]);
-    const first = await d1.from("user_profiles").select("user_id, distributor_id");
-    const second = await d2.from("user_profiles").select("user_id, distributor_id");
+    const first = await d1
+      .from("user_profiles")
+      .select("user_id, distributor_id");
+    const second = await d2
+      .from("user_profiles")
+      .select("user_id, distributor_id");
 
     expect(first.error).toBeNull();
     expect(second.error).toBeNull();
     expect(first.data).toHaveLength(3);
     expect(second.data).toHaveLength(3);
-    expect(first.data?.every((row) => row.distributor_id === fixture[0].id)).toBe(true);
-    expect(second.data?.every((row) => row.distributor_id === fixture[1].id)).toBe(true);
-    expect(first.data?.some((row) => row.distributor_id === fixture[1].id)).toBe(false);
-    expect(second.data?.some((row) => row.distributor_id === fixture[0].id)).toBe(false);
+    expect(
+      first.data?.every((row) => row.distributor_id === fixture[0].id),
+    ).toBe(true);
+    expect(
+      second.data?.every((row) => row.distributor_id === fixture[1].id),
+    ).toBe(true);
+    expect(
+      first.data?.some((row) => row.distributor_id === fixture[1].id),
+    ).toBe(false);
+    expect(
+      second.data?.some((row) => row.distributor_id === fixture[0].id),
+    ).toBe(false);
   });
 
   it("denies cross-tenant consignment items and tenant access to platform membership", async () => {
@@ -194,7 +250,9 @@ describe.skipIf(!RUN_LOCAL)("LOCAL two-tenant isolation fixture", () => {
     expect(crossTenantRead.error).toBeNull();
     expect(crossTenantRead.data).toEqual([]);
 
-    const tenantPlatformRead = await d1.from("platform_admins").select("user_id");
+    const tenantPlatformRead = await d1
+      .from("platform_admins")
+      .select("user_id");
     expect(tenantPlatformRead.error).toBeNull();
     expect(tenantPlatformRead.data).toEqual([]);
   });
@@ -243,27 +301,23 @@ describe.skipIf(!RUN_LOCAL)("LOCAL two-tenant isolation fixture", () => {
     const itemBId = insertItemB.data!.id;
 
     // 1. Mitra A cannot INSERT into its own tenant.
-    const insertByMitraA = await mitraA
-      .from("consignment_items")
-      .insert({
-        distributor_id: tenantA,
-        mitra_user_id: mitraAId,
-        name: "LOCAL-RLS-MITRA-INSERT-A",
-        sku: "LOCAL-RLS-MITRA-INSERT-A",
-      });
+    const insertByMitraA = await mitraA.from("consignment_items").insert({
+      distributor_id: tenantA,
+      mitra_user_id: mitraAId,
+      name: "LOCAL-RLS-MITRA-INSERT-A",
+      sku: "LOCAL-RLS-MITRA-INSERT-A",
+    });
 
     expect(insertByMitraA.error).toBeTruthy();
     expect(insertByMitraA.error?.code).toBe("42501");
 
     // 2. Mitra B cannot INSERT into its own tenant.
-    const insertByMitraB = await mitraB
-      .from("consignment_items")
-      .insert({
-        distributor_id: tenantB,
-        mitra_user_id: mitraBId,
-        name: "LOCAL-RLS-MITRA-INSERT-B",
-        sku: "LOCAL-RLS-MITRA-INSERT-B",
-      });
+    const insertByMitraB = await mitraB.from("consignment_items").insert({
+      distributor_id: tenantB,
+      mitra_user_id: mitraBId,
+      name: "LOCAL-RLS-MITRA-INSERT-B",
+      sku: "LOCAL-RLS-MITRA-INSERT-B",
+    });
 
     expect(insertByMitraB.error).toBeTruthy();
     expect(insertByMitraB.error?.code).toBe("42501");
@@ -403,6 +457,73 @@ describe.skipIf(!RUN_LOCAL)("LOCAL two-tenant isolation fixture", () => {
     expect(cleanupA.error).toBeNull();
     expect(cleanupB.error).toBeNull();
   });
+  it("isolates stock_movements by Mitra and Distributor tenant", async () => {
+    const { data: item, error: itemError } = await admin!
+      .from("consignment_items")
+      .insert({
+        distributor_id: fixture[1].id,
+        mitra_user_id: fixture[3].id,
+        name: "RLS-STOCK-MOVEMENT-FIXTURE",
+        sku: "RLS-STOCK-MOVEMENT-FIXTURE",
+        unit: "pcs",
+        stock_quantity: 10,
+        minimum_stock: 0,
+      })
+      .select("id")
+      .single();
+
+    expect(itemError).toBeNull();
+    expect(item).not.toBeNull();
+    const { data: movement, error: movementError } = await admin!
+      .from("stock_movements")
+      .insert({
+        distributor_id: fixture[1].id,
+        mitra_user_id: fixture[3].id,
+        item_id: item!.id,
+        previous_stock: 10,
+        change_quantity: 5,
+        resulting_stock: 15,
+        movement_type: "supplier_stock_change",
+        reason: "RLS isolation test",
+        approved_by: fixture[0].id,
+      })
+      .select("*")
+      .single();
+
+    expect(movementError).toBeNull();
+    expect(movement).not.toBeNull();
+
+    const mitraA = await signIn(fixture[3]);
+    const mitraB = await signIn(fixture[4]);
+    const distributorA = await signIn(fixture[1]);
+    const distributorB = await signIn(fixture[0]);
+
+    const { data: mitraAData } = await mitraA
+      .from("stock_movements")
+      .select("id")
+      .eq("id", movement.id);
+
+    const { data: mitraBData } = await mitraB
+      .from("stock_movements")
+      .select("id")
+      .eq("id", movement.id);
+
+    const { data: distributorAData } = await distributorA
+      .from("stock_movements")
+      .select("id")
+      .eq("id", movement.id);
+
+    const { data: distributorBData } = await distributorB
+      .from("stock_movements")
+      .select("id")
+      .eq("id", movement.id);
+
+    expect(mitraAData).toHaveLength(1);
+    expect(mitraBData).toHaveLength(0);
+    expect(distributorAData).toHaveLength(1);
+    expect(distributorBData).toHaveLength(0);
+  });
+
   it("denies sysadmin from reading a consignment item when distributor_id equals sysadmin UUID", async () => {
     const sysadminEmail = "auth32e-sysadmin-regression@example.local";
     const sysadminPassword = "LocalOnly-E2!safe";
@@ -459,9 +580,7 @@ describe.skipIf(!RUN_LOCAL)("LOCAL two-tenant isolation fixture", () => {
       expect(signInError).toBeNull();
       expect(sessionData.session?.access_token).toBeTruthy();
 
-      const sysadminClient = userClient(
-        sessionData.session!.access_token,
-      );
+      const sysadminClient = userClient(sessionData.session!.access_token);
 
       const result = await sysadminClient
         .from("consignment_items")
