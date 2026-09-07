@@ -477,7 +477,58 @@ expect(rejectedNotifications?.[0]).toMatchObject({
     expect(rejectedMovementsAfter).toHaveLength(rejectedMovementsBefore?.length ?? 0);
     expect(rejectedNotificationsAfter).toHaveLength(rejectedNotificationsBefore?.length ?? 0);
   });
+it("allows only one concurrent approval for the same stock_change request", async () => {
+  const prepared = await prepareStockChange(10, 15, "Concurrent approval test");
+  const { caller: distributorCallerA } = await callerFor(fixture[0]);
+  const { caller: distributorCallerB } = await callerFor(fixture[0]);
 
+  const results = await Promise.allSettled([
+    distributorCallerA.supplier.review({
+      requestId: prepared.requestId,
+      decision: "approved",
+      reviewNote: "concurrent approval A",
+    }),
+    distributorCallerB.supplier.review({
+      requestId: prepared.requestId,
+      decision: "approved",
+      reviewNote: "concurrent approval B",
+    }),
+  ]);
+
+  const fulfilled = results.filter((result) => result.status === "fulfilled");
+  const rejected = results.filter((result) => result.status === "rejected");
+
+  expect(fulfilled).toHaveLength(1);
+  expect(rejected).toHaveLength(1);
+
+  const { data: requestAfter } = await admin
+    .from("consignment_requests")
+    .select("status")
+    .eq("id", prepared.requestId)
+    .single();
+
+  const { data: itemAfter } = await admin
+    .from("consignment_items")
+    .select("stock_quantity")
+    .eq("id", prepared.itemId)
+    .single();
+
+  const { data: movementsAfter } = await admin
+    .from("stock_movements")
+    .select("id")
+    .eq("request_id", prepared.requestId);
+
+  const { data: notificationsAfter } = await admin
+    .from("notifications")
+    .select("id")
+    .eq("request_id", prepared.requestId)
+    .in("notification_type", ["request_approved", "request_rejected"]);
+
+  expect(requestAfter?.status).toBe("approved");
+  expect(itemAfter?.stock_quantity).toBe(15);
+  expect(movementsAfter).toHaveLength(1);
+  expect(notificationsAfter).toHaveLength(1);
+});
   it("rejects stock_change item scope, reviewer role, forged identity, and invalid quantities", async () => {
     const { caller: mitraA } = await callerFor(fixture[3]);
     const { caller: mitraB } = await callerFor(fixture[4]);
