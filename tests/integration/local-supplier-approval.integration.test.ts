@@ -33,6 +33,7 @@ let admin: SupabaseClient;
 let requestAId: string;
 let requestBId: string;
 let rejectedRequestId: string;
+let ws001RequestId: string;
 let stockChangeRequestIds: string[] = [];
 
 function assertLocalTestConfiguration() {
@@ -123,7 +124,7 @@ async function cleanupFixture() {
 
   const cleanupErrors: string[] = [];
   const userIds = ids.map((user) => user.id);
-  const requestIds = [requestAId, requestBId, rejectedRequestId, ...stockChangeRequestIds].filter(Boolean);
+  const requestIds = [requestAId, requestBId, rejectedRequestId, ws001RequestId, ...stockChangeRequestIds].filter(Boolean);
 
   if (requestIds.length > 0) {
     for (const table of ["notifications", "stock_movements"] as const) {
@@ -652,5 +653,109 @@ it("allows only one concurrent approval for the same stock_change request", asyn
     });
     expect(directUnauthorized.data).toBeNull();
     expect(directUnauthorized.error).toBeTruthy();
+  });
+
+  it("blocks direct authenticated request UPDATE while preserving the official review RPC", async () => {
+    const { caller: mitraCaller } = await callerFor(fixture[3]);
+    const request = await mitraCaller.supplier.submitNewItem({
+      name: "WS-001 DIRECT UPDATE BLOCK",
+      sku: "WS-001-DIRECT-UPDATE",
+      unit: "pcs",
+      proposedStockQuantity: 7,
+      proposedMinimumStock: 1,
+      reason: "Verify direct review update is blocked",
+    });
+    ws001RequestId = request.id;
+
+    const distributorClient = await signIn(fixture[0]);
+    const directUpdate = await distributorClient
+      .from("consignment_requests")
+      .update({
+        status: "approved",
+        reviewed_by: fixture[0].id,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq("id", ws001RequestId)
+      .select("id, status");
+
+    expect(directUpdate.error).toBeNull();
+    expect(directUpdate.data).toEqual([]);
+
+    const { data: pendingRequest, error: pendingRequestError } = await admin
+      .from("consignment_requests")
+      .select("status, reviewed_by, reviewed_at, item_id, product_id")
+      .eq("id", ws001RequestId)
+      .single();
+    expect(pendingRequestError).toBeNull();
+    expect(pendingRequest).toMatchObject({
+      status: "pending",
+      reviewed_by: null,
+      reviewed_at: null,
+      item_id: null,
+      product_id: null,
+    });
+
+    const { data: movementsBeforeReview, error: movementsBeforeReviewError } = await admin
+      .from("stock_movements")
+      .select("id")
+      .eq("request_id", ws001RequestId);
+    expect(movementsBeforeReviewError).toBeNull();
+    expect(movementsBeforeReview).toEqual([]);
+
+    const { data: reviewNotificationsBefore, error: reviewNotificationsBeforeError } = await admin
+      .from("notifications")
+      .select("id")
+      .eq("request_id", ws001RequestId)
+      .in("notification_type", ["request_approved", "request_rejected"]);
+    expect(reviewNotificationsBeforeError).toBeNull();
+    expect(reviewNotificationsBefore).toEqual([]);
+
+    const { caller: distributorCaller } = await callerFor(fixture[0]);
+    const review = await distributorCaller.supplier.review({
+      requestId: ws001RequestId,
+      decision: "approved",
+      reviewNote: "official RPC review after direct UPDATE rejection",
+    });
+    expect(review.status).toBe("approved");
+
+    const { data: reviewedRequest, error: reviewedRequestError } = await admin
+      .from("consignment_requests")
+      .select("status, reviewed_by, reviewed_at, item_id, product_id")
+      .eq("id", ws001RequestId)
+      .single();
+    expect(reviewedRequestError).toBeNull();
+    expect(reviewedRequest?.status).toBe("approved");
+    expect(reviewedRequest?.reviewed_by).toBe(fixture[0].id);
+    expect(reviewedRequest?.reviewed_at).toBeTruthy();
+    expect(reviewedRequest?.item_id).toBeTruthy();
+    expect(reviewedRequest?.product_id).toBeTruthy();
+
+    const { data: movementsAfterReview, error: movementsAfterReviewError } = await admin
+      .from("stock_movements")
+      .select("movement_type, request_id, item_id, mitra_user_id, distributor_id, approved_by")
+      .eq("request_id", ws001RequestId);
+    expect(movementsAfterReviewError).toBeNull();
+    expect(movementsAfterReview).toHaveLength(1);
+    expect(movementsAfterReview?.[0]).toMatchObject({
+      movement_type: "initial_stock",
+      request_id: ws001RequestId,
+      mitra_user_id: fixture[3].id,
+      distributor_id: fixture[0].id,
+      approved_by: fixture[0].id,
+    });
+
+    const { data: reviewNotificationsAfter, error: reviewNotificationsAfterError } = await admin
+      .from("notifications")
+      .select("notification_type, recipient_user_id, distributor_id, request_id")
+      .eq("request_id", ws001RequestId)
+      .in("notification_type", ["request_approved", "request_rejected"]);
+    expect(reviewNotificationsAfterError).toBeNull();
+    expect(reviewNotificationsAfter).toHaveLength(1);
+    expect(reviewNotificationsAfter?.[0]).toMatchObject({
+      notification_type: "request_approved",
+      recipient_user_id: fixture[3].id,
+      distributor_id: fixture[0].id,
+      request_id: ws001RequestId,
+    });
   });
 });
