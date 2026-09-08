@@ -1,5 +1,5 @@
-import { useSyncExternalStore } from "react";
-
+import { useMemo } from "react";
+import { trpc } from "./trpc";
 import type { BudgetPeriod } from "@/lib/mitra-production-budgets";
 
 export type ProductionStatus = "Direncanakan" | "Selesai";
@@ -19,51 +19,39 @@ export type MitraProduction = {
   createdAt: string;
 };
 
-export type NewMitraProduction = Omit<MitraProduction, "id" | "createdAt" | "status" | "actualQuantity" | "damagedQuantity" | "yieldPercentage" | "resultNotes">;
+type ProductionDto = {
+  id: string;
+  productId: string;
+  productionDate: string;
+  budgetPeriod: string;
+  targetQuantity: number;
+  actualQuantity: number | null;
+  damagedQuantity: number;
+  yieldPercentage: number | null;
+  notes: string;
+  resultNotes: string;
+  status: string;
+  createdAt: string;
+};
 
-let productions: MitraProduction[] = [];
-const listeners = new Set<() => void>();
-
-function emitChange() {
-  listeners.forEach((listener) => listener());
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export function getMitraProductions() {
-  return productions;
-}
-
-export function useMitraProductions() {
-  return useSyncExternalStore(subscribe, getMitraProductions, getMitraProductions);
-}
-
-export function updateMitraProductionResult(input: { id: string; actualQuantity: number; damagedQuantity: number; yieldPercentage: number; resultNotes: string }) {
-  let updatedProduction: MitraProduction | undefined;
-  productions = productions.map((production) => {
-    if (production.id !== input.id) return production;
-    updatedProduction = { ...production, actualQuantity: input.actualQuantity, damagedQuantity: input.damagedQuantity, yieldPercentage: input.yieldPercentage, resultNotes: input.resultNotes, status: "Selesai" };
-    return updatedProduction;
-  });
-  if (updatedProduction) emitChange();
-  return updatedProduction;
-}
-
-export function saveMitraProduction(input: NewMitraProduction) {
-  const production: MitraProduction = {
-    ...input,
-    id: `production-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    status: "Direncanakan",
-    actualQuantity: null,
-    damagedQuantity: null,
-    yieldPercentage: null,
-    resultNotes: "",
-    createdAt: new Date().toISOString(),
+function toMitraProduction(dto: ProductionDto): MitraProduction {
+  return {
+    id: dto.id,
+    productId: dto.productId,
+    productionDate: dto.productionDate,
+    budgetPeriod: dto.budgetPeriod as BudgetPeriod,
+    targetQuantity: dto.targetQuantity,
+    actualQuantity: dto.actualQuantity,
+    damagedQuantity: dto.status === "planned" ? null : dto.damagedQuantity,
+    yieldPercentage: dto.yieldPercentage,
+    notes: dto.notes,
+    resultNotes: dto.resultNotes,
+    status: dto.status === "completed" ? "Selesai" : "Direncanakan",
+    createdAt: dto.createdAt,
   };
-  productions = [production, ...productions];
-  emitChange();
-  return production;
+}
+
+export function useMitraProductions(): MitraProduction[] {
+  const query = trpc.productionEvents.list.useQuery(undefined);
+  return useMemo(() => (query.data ?? []).map(toMitraProduction), [query.data]);
 }
