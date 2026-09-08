@@ -12,8 +12,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatProductPrice, useMitraProducts } from "@/lib/mitra-products";
 import { saveMitraProductionBudget, type BudgetPeriod, useMitraProductionBudgets } from "@/lib/mitra-production-budgets";
 import { dateKeyToMonthKey, formatBudgetPeriodSelection, getCalendarMonthDays, isDateInSelectedPeriod, parseDateKey, shiftCalendarMonth } from "@/lib/mitra-budget-period";
-import { saveMitraProductionHpp, useMitraProductionHpps } from "@/lib/mitra-production-hpp";
-import type { MitraProductionHpp } from "@/lib/mitra-production-hpp";
+import { useMitraProductionHpps } from "@/lib/mitra-production-hpp";
+import type { HppComponent, MitraProductionHpp } from "@/shared/hpp";
 import { filterMitraProductionHistory, getHistoryHpp } from "@/lib/mitra-production-history";
 import { type MitraProduction, type ProductionStatus } from "@/lib/mitra-productions";
 import { useEffect, useState } from "react";
@@ -103,6 +103,15 @@ export default function ProductionScreen() {
     },
     onError: (mutationError) => setError(mutationError.message || "Hasil produksi belum dapat disimpan."),
   });
+  const saveHppMutation = trpc.hpp.upsert.useMutation({
+    onSuccess: async () => {
+      await utils.hpp.list.invalidate();
+      setError(null);
+      setSavedMessage("HPP berhasil disimpan untuk produk ini.");
+      switchView("list");
+    },
+    onError: (mutationError) => setError(mutationError.message || "HPP belum dapat disimpan."),
+  });
   const selectedProduct = products.find((product) => product.id === selectedProductId) ?? null;
   const budgetProduct = products.find((product) => product.id === budgetProductId) ?? null;
   const savedBudget = budgetProductId ? budgets.get(`${budgetProductId}:${budgetPeriod}`) : undefined;
@@ -152,7 +161,7 @@ export default function ProductionScreen() {
     createProductionMutation.mutate({ productId: selectedProductId, productionDate: productionDate.trim(), budgetPeriod: period, targetQuantity: quantity, notes: notes.trim() });
   };
 
-  const handleSaveHpp = (components: Parameters<typeof saveMitraProductionHpp>[0]["components"], outputQuantity: number) => {
+  const handleSaveHpp = (components: HppComponent[], outputQuantity: number) => {
     if (!hppProductId) {
       setError("Pilih produk terlebih dahulu.");
       return;
@@ -161,10 +170,7 @@ export default function ProductionScreen() {
       setError("Masukkan jumlah hasil produksi yang lebih besar dari 0.");
       return;
     }
-    saveMitraProductionHpp({ productId: hppProductId, components, outputQuantity });
-    setError(null);
-    setSavedMessage("HPP berhasil disimpan untuk produk ini.");
-    switchView("list");
+    saveHppMutation.mutate({ productId: hppProductId, components, outputQuantity });
   };
 
   const handleSaveResult = () => {
@@ -255,7 +261,7 @@ export default function ProductionScreen() {
             ) : view === "results" ? (
               <ResultForm colors={colors} productions={persistentProductions} productNames={new Map((productsQuery.data ?? []).map((product) => [product.id, product.name]))} selectedProduction={selectedResult} isSelectorOpen={isResultSelectorOpen} onToggleSelector={() => setResultSelectorOpen((open) => !open)} onSelectProduction={(id) => { setSelectedResultId(id); setResultSelectorOpen(false); setError(null); setSavedMessage(null); }} actualQuantity={actualQuantity} onActualChange={setActualQuantity} damagedQuantity={damagedQuantity} onDamagedChange={setDamagedQuantity} resultNotes={resultNotes} onNotesChange={setResultNotes} onSave={handleSaveResult} error={error} savedMessage={savedMessage} isSaving={completeProductionMutation.isPending} />
             ) : view === "hpp" ? (
-              <MitraHppEditor colors={colors} product={selectedHppProduct} savedHpp={hppProductId ? hpps.get(hppProductId) : undefined} onSave={handleSaveHpp} error={error} message={savedMessage} />
+              <MitraHppEditor colors={colors} product={selectedHppProduct} savedHpp={hppProductId ? hpps.get(hppProductId) : undefined} onSave={handleSaveHpp} error={error} message={savedMessage} isSaving={saveHppMutation.isPending} />
             ) : view === "history" ? (
               <ProductionHistoryHeader colors={colors} products={productsQuery.data ?? []} productions={persistentProductions} productFilter={historyProductFilter} dateFilter={historyDateFilter} onProductFilter={setHistoryProductFilter} onDateFilter={setHistoryDateFilter} count={historyProductions.length} />
             ) : view === "stock" ? (

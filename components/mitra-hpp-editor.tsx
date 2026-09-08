@@ -1,6 +1,6 @@
 import { AppIcon } from "@/components/ui/app-icon";
 import { useColors } from "@/hooks/use-colors";
-import { calculateHppSummary, type HppComponent, type HppComponentType, type MitraProductionHpp } from "@/lib/mitra-production-hpp";
+import { calculateHppSummary, type HppComponent, type HppComponentType, type MitraProductionHpp } from "@/shared/hpp";
 import type { MitraProduct } from "@/lib/mitra-products";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -21,13 +21,14 @@ type Props = {
   onSave: (components: HppComponent[], outputQuantity: number) => void;
   message: string | null;
   error: string | null;
+  isSaving: boolean;
 };
 
 function newComponent(type: HppComponentType, name: string): HppComponent {
   return { id: `hpp-component-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, type, name, cost: 0 };
 }
 
-export function MitraHppEditor({ colors, product, savedHpp, onSave, message, error }: Props) {
+export function MitraHppEditor({ colors, product, savedHpp, onSave, message, error, isSaving }: Props) {
   const [components, setComponents] = useState<HppComponent[]>([]);
   const [outputQuantity, setOutputQuantity] = useState("");
   const [newType, setNewType] = useState<HppComponentType>("Bahan Baku");
@@ -62,7 +63,7 @@ export function MitraHppEditor({ colors, product, savedHpp, onSave, message, err
       <View style={[styles.addBox, { borderColor: colors.border }]}><Text style={[styles.addTitle, { color: colors.foreground }]}>Tambah Komponen</Text><View style={styles.chipRow}>{COMPONENT_TYPES.map((type) => <Pressable key={type} accessibilityRole="button" onPress={() => setNewType(type)} style={[styles.chip, { borderColor: newType === type ? colors.primary : colors.border, backgroundColor: newType === type ? `${colors.primary}14` : colors.background }]}><Text style={[styles.chipText, { color: newType === type ? colors.primary : colors.muted }]}>{type}</Text></Pressable>)}</View><View style={styles.addInputs}><TextInput value={newName} onChangeText={setNewName} placeholder="Nama komponen baru" placeholderTextColor={colors.muted} style={[styles.addNameInput, { color: colors.foreground, borderColor: colors.border }]} /><Pressable accessibilityRole="button" onPress={addComponent} style={({ pressed }) => [styles.addButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><AppIcon name="add" size={18} color={colors.background} /><Text style={[styles.addButtonText, { color: colors.background }]}>Tambah</Text></Pressable></View></View>
       <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Jumlah Hasil Produksi</Text><TextInput value={outputQuantity} onChangeText={setOutputQuantity} placeholder="Contoh: 100 unit" placeholderTextColor={colors.muted} keyboardType="numeric" style={[styles.input, { color: colors.foreground, borderColor: colors.border }]} />
       <View style={[styles.summary, { backgroundColor: colors.background, borderColor: colors.border }]}><Text style={[styles.summaryTitle, { color: colors.foreground }]}>Ringkasan HPP</Text><SummaryRow label="Total Bahan Baku" value={summary.totalRawMaterials} colors={colors} /><SummaryRow label="Total Bahan Penunjang" value={summary.totalSupportingMaterials} colors={colors} /><SummaryRow label="Total Tenaga Produksi" value={summary.totalLabor} colors={colors} /><View style={[styles.grandTotal, { borderTopColor: colors.border }]}><Text style={[styles.grandLabel, { color: colors.foreground }]}>Total Biaya Produksi</Text><Text style={[styles.grandValue, { color: colors.primary }]}>{formatCurrency(summary.totalProductionCost)}</Text></View><SummaryRow label="Jumlah Hasil Produksi" value={output} colors={colors} suffix=" unit" /><View style={[styles.grandTotal, { borderTopColor: colors.border }]}><Text style={[styles.grandLabel, { color: colors.foreground }]}>HPP / Unit</Text><Text style={[styles.grandValue, { color: colors.primary }]}>{formatCurrency(summary.costPerUnit)}</Text></View></View>
-      {error ? <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text> : null}<Pressable accessibilityRole="button" onPress={() => onSave(components, output)} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}><AppIcon name="verified" size={18} color={colors.background} /><Text style={[styles.saveText, { color: colors.background }]}>Simpan HPP</Text></Pressable>{message ? <Text style={[styles.savedText, { color: colors.success }]}>{message}</Text> : null}
+      {error ? <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text> : null}<Pressable accessibilityRole="button" disabled={isSaving} onPress={() => onSave(components, output)} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.primary, opacity: isSaving ? 0.65 : 1 }, pressed && styles.pressed]}><AppIcon name="verified" size={18} color={colors.background} /><Text style={[styles.saveText, { color: colors.background }]}>{isSaving ? "Menyimpan..." : "Simpan HPP"}</Text></Pressable>{message ? <Text style={[styles.savedText, { color: colors.success }]}>{message}</Text> : null}
     </> : null}
   </View>;
 }

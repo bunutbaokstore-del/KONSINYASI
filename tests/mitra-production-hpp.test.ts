@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateHppSummary, getMitraProductionHpp, saveMitraProductionHpp } from "../lib/mitra-production-hpp";
+import { calculateHppSummary } from "../shared/hpp";
 
 describe("Mitra production HPP", () => {
   it("calculates material, supporting, labor, total, and unit cost", () => {
@@ -13,11 +13,9 @@ describe("Mitra production HPP", () => {
     expect(summary).toEqual({ totalRawMaterials: 120000, totalSupportingMaterials: 30000, totalLabor: 50000, totalProductionCost: 200000, costPerUnit: 2000 });
   });
 
-  it("saves and reads HPP independently by productId", () => {
-    saveMitraProductionHpp({ productId: "demo-kopi-arabika", components: [], outputQuantity: 100 });
-    saveMitraProductionHpp({ productId: "demo-keripik-pisang", components: [{ id: "raw-2", type: "Bahan Baku", name: "Pisang", cost: 90000 }], outputQuantity: 30 });
+  it("returns zero totals when there are no components", () => {
+    const summary = calculateHppSummary([], 30);
 
-    expect(getMitraProductionHpp("demo-kopi-arabika")?.totalProductionCost).toBe(0);
-    expect(getMitraProductionHpp("demo-keripik-pisang")).toMatchObject({ productId: "demo-keripik-pisang", totalProductionCost: 90000, costPerUnit: 3000 });
+    expect(summary).toEqual({ totalRawMaterials: 0, totalSupportingMaterials: 0, totalLabor: 0, totalProductionCost: 0, costPerUnit: 0 });
   });
 });

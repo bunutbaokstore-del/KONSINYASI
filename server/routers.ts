@@ -8,6 +8,7 @@ import { TRPCError } from "@trpc/server";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { KTP_CONTENT_TYPES } from "../shared/user-profile";
 import { getStockStatus, summarizeStock } from "../shared/consignment";
+import { calculateHppSummary, type HppComponent } from "../shared/hpp";
 import { z } from "zod";
 
 const roleSchema = z.enum(["distributor", "admin", "mitra_umkm", "supervisor", "sales_motoris", "hrd"]);
@@ -158,6 +159,7 @@ function toProduct(product: { id: string; distributor_id: string; created_by_mit
 
 const productionEventSelect = "id, distributor_id, mitra_user_id, product_id, production_date, budget_period, target_quantity, actual_quantity, damaged_quantity, yield_percentage, notes, result_notes, status, created_at, completed_at";
 const mitraShipmentSelect = "id, distributor_id, mitra_user_id, product_id, consignment_item_id, quantity, status, shipment_date, notes, created_at, updated_at, shipped_at, received_at, received_by, received_notes";
+const hppSelect = "id, distributor_id, mitra_user_id, product_id, components, output_quantity, total_raw_materials, total_supporting_materials, total_labor, total_production_cost, cost_per_unit, created_at, updated_at";
 
 function toProductionEvent(event: { id: string; distributor_id: string; mitra_user_id: string; product_id: string; production_date: string; budget_period: string; target_quantity: number; actual_quantity?: number | null; damaged_quantity: number; yield_percentage?: number | null; notes: string; result_notes: string; status: string; created_at: string; completed_at?: string | null }) {
   return {
@@ -176,6 +178,20 @@ function toProductionEvent(event: { id: string; distributor_id: string; mitra_us
     status: event.status,
     createdAt: event.created_at,
     completedAt: event.completed_at ?? null,
+  } as const;
+}
+
+function toHpp(row: { product_id: string; components: HppComponent[] | null; output_quantity: number; total_raw_materials: string | number; total_supporting_materials: string | number; total_labor: string | number; total_production_cost: string | number; cost_per_unit: string | number; updated_at: string }) {
+  return {
+    productId: row.product_id,
+    components: Array.isArray(row.components) ? row.components : [],
+    outputQuantity: row.output_quantity,
+    totalRawMaterials: Number(row.total_raw_materials),
+    totalSupportingMaterials: Number(row.total_supporting_materials),
+    totalLabor: Number(row.total_labor),
+    totalProductionCost: Number(row.total_production_cost),
+    costPerUnit: Number(row.cost_per_unit),
+    updatedAt: row.updated_at,
   } as const;
 }
 
@@ -1096,6 +1112,72 @@ export const appRouter = router({
           .single();
         if (error || !data) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Event produksi berhasil diproses tetapi belum dapat dimuat ulang." });
         return toProductionEvent(data);
+      }),
+  }),
+  hpp: router({
+    list: supabaseProtectedProcedure.query(async ({ ctx }) => {
+      const role = callerRole(ctx);
+      if (role !== "mitra_umkm" && role !== "distributor" && role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Role ini tidak dapat melihat HPP produksi." });
+      }
+
+      const distributorId = getDistributorId(ctx.supabaseUser);
+      if (!distributorId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja HPP produksi tidak ditemukan." });
+      }
+
+      let query = getSupabaseAdminClient()
+        .from("mitra_production_hpp")
+        .select(hppSelect)
+        .eq("distributor_id", distributorId)
+        .order("updated_at", { ascending: false });
+      if (role === "mitra_umkm") query = query.eq("mitra_user_id", ctx.supabaseUser!.id);
+
+      const { data, error } = await query;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "HPP produksi belum dapat dimuat." });
+
+      return (data ?? []).map(toHpp);
+    }),
+    upsert: supabaseProtectedProcedure
+      .input(z.object({
+        productId: z.string().uuid(),
+        components: z.array(z.object({
+          id: z.string().trim().min(1, "ID komponen tidak valid.").max(80),
+          type: z.enum(["Bahan Baku", "Bahan Penunjang", "Tenaga Produksi"]),
+          name: z.string().trim().min(1, "Nama komponen tidak boleh kosong.").max(80),
+          cost: z.number().finite().min(0).max(9999999999999.99),
+        })).max(50, "Jumlah komponen HPP terlalu banyak."),
+        outputQuantity: z.number().int().min(1, "Jumlah hasil produksi harus lebih besar dari 0.").max(1000000000),
+      }).strict())
+      .mutation(async ({ ctx, input }) => {
+        const { mitraUserId, distributorId } = requireMitraProductionContext(ctx);
+        await validateMitraProductionProduct(input.productId, mitraUserId, distributorId);
+        const components: HppComponent[] = input.components.map((component) => ({
+          id: component.id,
+          type: component.type,
+          name: component.name,
+          cost: component.cost,
+        }));
+        const summary = calculateHppSummary(components, input.outputQuantity);
+        const { data, error } = await getSupabaseAdminClient()
+          .from("mitra_production_hpp")
+          .upsert({
+            distributor_id: distributorId,
+            mitra_user_id: mitraUserId,
+            product_id: input.productId,
+            components,
+            output_quantity: input.outputQuantity,
+            total_raw_materials: summary.totalRawMaterials,
+            total_supporting_materials: summary.totalSupportingMaterials,
+            total_labor: summary.totalLabor,
+            total_production_cost: summary.totalProductionCost,
+            cost_per_unit: summary.costPerUnit,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "distributor_id,mitra_user_id,product_id" })
+          .select(hppSelect)
+          .single();
+        if (error || !data) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "HPP produksi belum dapat disimpan." });
+        return toHpp(data);
       }),
   }),
   mitraProductionStock: router({
