@@ -137,7 +137,9 @@ function toNotification(notification: { id: string; notification_type: string; t
   return { id: notification.id, notificationType: notification.notification_type, title: notification.title, body: notification.body, isRead: notification.is_read, requestId: notification.request_id ?? null, createdAt: notification.created_at } as const;
 }
 
-function toProduct(product: { id: string; distributor_id: string; created_by_mitra_user_id?: string | null; name: string; sku?: string | null; unit: string; lifecycle_status: string; created_at: string; updated_at: string }) {
+const PRODUCT_SELECT = "id, distributor_id, created_by_mitra_user_id, name, sku, unit, category, size, selling_price, lifecycle_status, created_at, updated_at";
+
+function toProduct(product: { id: string; distributor_id: string; created_by_mitra_user_id?: string | null; name: string; sku?: string | null; unit: string; lifecycle_status: string; created_at: string; updated_at: string; category?: string | null; size?: string | null; selling_price?: string | number | null }) {
   return {
     id: product.id,
     distributorId: product.distributor_id,
@@ -145,6 +147,9 @@ function toProduct(product: { id: string; distributor_id: string; created_by_mit
     name: product.name,
     sku: product.sku ?? null,
     unit: product.unit,
+    category: product.category ?? null,
+    size: product.size ?? null,
+    sellingPrice: product.selling_price == null ? null : Number(product.selling_price),
     lifecycleStatus: product.lifecycle_status,
     createdAt: product.created_at,
     updatedAt: product.updated_at,
@@ -805,7 +810,7 @@ export const appRouter = router({
         const adminClient = getSupabaseAdminClient();
         let query = adminClient
           .from("products")
-          .select("id, distributor_id, created_by_mitra_user_id, name, sku, unit, lifecycle_status, created_at, updated_at")
+          .select(PRODUCT_SELECT)
           .eq("distributor_id", distributorId)
           .order("updated_at", { ascending: false });
         if (input?.lifecycleStatus) query = query.eq("lifecycle_status", input.lifecycleStatus);
@@ -836,7 +841,7 @@ export const appRouter = router({
         const adminClient = getSupabaseAdminClient();
         const { data: product, error } = await adminClient
           .from("products")
-          .select("id, distributor_id, created_by_mitra_user_id, name, sku, unit, lifecycle_status, created_at, updated_at")
+          .select(PRODUCT_SELECT)
           .eq("id", input.productId)
           .eq("distributor_id", distributorId)
           .maybeSingle();
@@ -863,7 +868,7 @@ export const appRouter = router({
           .update({ lifecycle_status: "active", updated_at: new Date().toISOString() })
           .eq("id", input.productId)
           .eq("distributor_id", distributorId)
-          .select("id, distributor_id, created_by_mitra_user_id, name, sku, unit, lifecycle_status, created_at, updated_at")
+          .select(PRODUCT_SELECT)
           .maybeSingle();
         if (error || !data) throw new TRPCError({ code: "NOT_FOUND", message: "Produk tidak ditemukan." });
         return toProduct(data);
@@ -878,9 +883,37 @@ export const appRouter = router({
           .update({ lifecycle_status: "inactive", updated_at: new Date().toISOString() })
           .eq("id", input.productId)
           .eq("distributor_id", distributorId)
-          .select("id, distributor_id, created_by_mitra_user_id, name, sku, unit, lifecycle_status, created_at, updated_at")
+          .select(PRODUCT_SELECT)
           .maybeSingle();
         if (error || !data) throw new TRPCError({ code: "NOT_FOUND", message: "Produk tidak ditemukan." });
+        return toProduct(data);
+      }),
+    update: distributorProcedure
+      .input(z.object({
+        productId: z.string().uuid("ID produk tidak valid."),
+        category: z.string().trim().min(1, "Kategori minimal 1 karakter.").max(80, "Kategori maksimal 80 karakter.").nullable().optional(),
+        size: z.string().trim().min(1, "Ukuran minimal 1 karakter.").max(40, "Ukuran maksimal 40 karakter.").nullable().optional(),
+        sellingPrice: z.number().finite("Harga jual tidak valid.").min(0, "Harga jual tidak boleh negatif.").max(9999999999999.99, "Harga jual melebihi batas maksimal.").nullable().optional(),
+      }).strict())
+      .mutation(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        if (input.category === undefined && input.size === undefined && input.sellingPrice === undefined) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Tidak ada metadata produk yang diberikan." });
+        }
+        const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (input.category !== undefined) patch.category = input.category;
+        if (input.size !== undefined) patch.size = input.size;
+        if (input.sellingPrice !== undefined) patch.selling_price = input.sellingPrice;
+        const { data, error } = await getSupabaseAdminClient()
+          .from("products")
+          .update(patch)
+          .eq("id", input.productId)
+          .eq("distributor_id", distributorId)
+          .select(PRODUCT_SELECT)
+          .maybeSingle();
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Metadata produk belum dapat diperbarui." });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Produk tidak ditemukan." });
         return toProduct(data);
       }),
   }),
