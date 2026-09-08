@@ -20,9 +20,10 @@ describe("Mitra Shipment persistent Create UI contract", () => {
     expect(source).not.toContain("saveMitraShipment");
   });
 
-  it("keeps Shipment READ persistent and Ship/status mutation legacy", () => {
+  it("keeps Shipment READ persistent and removes the legacy status mutation", () => {
     expect(source).toContain("trpc.mitraShipments.list.useQuery()");
-    expect(source).toContain("updateMitraShipmentStatus");
+    expect(source).toContain("PERSISTENT_STATUS_LABELS");
+    expect(source).not.toContain("updateMitraShipmentStatus");
     expect(source).not.toContain("ship_mitra_shipment");
     expect(source).not.toContain("availableStock - quantity");
   });
@@ -33,19 +34,21 @@ describe("Mitra Shipment persistent Create UI contract", () => {
     expect(source).toContain("createShipment.isPending");
   });
 
-  it("uses the persistent Ship mutation without client-side stock deduction", () => {
-    expect(source).toContain("trpc.mitraShipments.ship.useMutation()");
-    expect(source).toContain("await shipMutation.mutateAsync({ shipmentId: id })");
-    expect(source).toContain('if (status !== "Dikirim")');
-    expect(source).toContain("await utils.mitraProductionStock.list.invalidate()");
+  it("reads stock from persistent mitraProductionStock.list instead of local store", () => {
+    expect(source).toContain("trpc.mitraProductionStock.list.useQuery()");
+    expect(source).toContain("stockQuery.data?.find((row) => row.productId === productId)?.availableQuantity ?? 0");
+    expect(source).not.toContain("getAvailableStock");
     expect(source).not.toContain("availableStock - quantity");
     expect(source).not.toContain("availableStock -=");
   });
 
-  it("keeps Create, READ, and Receiving boundaries intact", () => {
-    expect(source).toContain("trpc.mitraShipments.create.useMutation()");
-    expect(source).toContain("trpc.mitraShipments.list.useQuery()");
-    expect(source).toContain("updateMitraShipmentStatus");
+  it("uses the persistent Ship mutation with stock invalidate and no Diterima action for Mitra", () => {
+    expect(source).toContain("trpc.mitraShipments.ship.useMutation()");
+    expect(source).toContain("await shipMutation.mutateAsync({ shipmentId: id })");
+    expect(source).toContain("shipment.status === \"planned\"");
+    expect(source).toContain("await utils.mitraProductionStock.list.invalidate()");
+    expect(source).not.toContain("updateMitraShipmentStatus");
     expect(source).not.toContain("receive_mitra_shipment");
+    expect(source).not.toContain("DISTRIBUTORS");
   });
 });
