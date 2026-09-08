@@ -145,6 +145,56 @@ async function cleanupFixtureUsers(
   const cleanupErrors: string[] = [];
   const userIds = usersWithIds.map((user) => user.id);
 
+  const mitraIds = usersWithIds
+    .filter((user) => user.role === "mitra_umkm")
+    .map((user) => user.id);
+
+  const distributorIds = usersWithIds
+    .filter((user) => user.role === "distributor")
+    .map((user) => user.id);
+
+  if (distributorIds.length > 0) {
+    const { error: movementError } = await client
+      .from("stock_movements")
+      .delete()
+      .in("distributor_id", distributorIds);
+    if (movementError) {
+      cleanupErrors.push(
+        `stock_movements cleanup failed: ${movementError.message}`,
+      );
+    }
+
+    const { error: itemError } = await client
+      .from("consignment_items")
+      .delete()
+      .in("distributor_id", distributorIds);
+    if (itemError) {
+      cleanupErrors.push(
+        `consignment_items cleanup failed: ${itemError.message}`,
+      );
+    }
+  } else if (mitraIds.length > 0) {
+    const { error: movementError } = await client
+      .from("stock_movements")
+      .delete()
+      .in("mitra_user_id", mitraIds);
+    if (movementError) {
+      cleanupErrors.push(
+        `stock_movements cleanup failed: ${movementError.message}`,
+      );
+    }
+
+    const { error: itemError } = await client
+      .from("consignment_items")
+      .delete()
+      .in("mitra_user_id", mitraIds);
+    if (itemError) {
+      cleanupErrors.push(
+        `consignment_items cleanup failed: ${itemError.message}`,
+      );
+    }
+  }
+
   const { error: profileError } = await client
     .from("user_profiles")
     .delete()

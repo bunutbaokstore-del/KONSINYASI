@@ -561,12 +561,28 @@ export const appRouter = router({
         }
         const adminClient = getSupabaseAdminClient();
         const { data: profile } = await adminClient.from("user_profiles").select("ktp_storage_path").eq("user_id", input.userId).maybeSingle();
-        if (profile?.ktp_storage_path) {
-          await adminClient.storage.from("user-ktp").remove([profile.ktp_storage_path]);
+        const ktpStoragePath = profile?.ktp_storage_path ?? null;
+
+        if (getUserRole(target) === "mitra_umkm") {
+          const { count, error: historyError } = await adminClient
+            .from("stock_movements")
+            .select("id", { count: "exact", head: true })
+            .eq("mitra_user_id", input.userId);
+          if (historyError) {
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Riwayat stok/transaksi belum dapat diperiksa." });
+          }
+          if ((count ?? 0) > 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Akun memiliki riwayat stok/transaksi. Nonaktifkan akun saja." });
+          }
         }
+
         const { error } = await adminClient.auth.admin.deleteUser(input.userId);
         if (error) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Akun belum dapat dihapus." });
+        }
+
+        if (ktpStoragePath) {
+          await adminClient.storage.from("user-ktp").remove([ktpStoragePath]);
         }
         return { success: true } as const;
       }),
