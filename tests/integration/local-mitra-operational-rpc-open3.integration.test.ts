@@ -51,6 +51,8 @@ type FixtureUser = {
 const fixture: FixtureUser[] = [
   { email: "open3-d1@example.local", password: "LocalOnly-Open3-D1!safe", role: "distributor" },
   { email: "open3-m1@example.local", password: "LocalOnly-Open3-M1!safe", role: "mitra_umkm" },
+  { email: "open3-d2@example.local", password: "LocalOnly-Open3-D2!safe", role: "distributor" },
+  { email: "open3-m2@example.local", password: "LocalOnly-Open3-M2!safe", role: "mitra_umkm" },
 ];
 
 let admin: SupabaseClient;
@@ -361,6 +363,8 @@ describe.skipIf(!RUN_LOCAL)("OPEN-3 mitra operational RPC execute scope", () => 
     try {
       await provisionUser(fixture[0]);
       await provisionUser(fixture[1], fixture[0].id);
+      await provisionUser(fixture[2]);
+      await provisionUser(fixture[3], fixture[2].id);
 
       const { data: product, error: productError } = await admin
         .from("products")
@@ -436,7 +440,7 @@ describe.skipIf(!RUN_LOCAL)("OPEN-3 mitra operational RPC execute scope", () => 
       const shipmentTwoPlanned = await mitraCaller.mitraShipments.create({
         productId: productA,
         consignmentItemId: consignmentItemA,
-        quantity: 2,
+        quantity: 99,
         shipmentDate: "2026-01-13",
         notes: "OPEN-3 shipment two",
       });
@@ -514,7 +518,7 @@ describe.skipIf(!RUN_LOCAL)("OPEN-3 mitra operational RPC execute scope", () => 
     expect(await stockQuantity()).toBe(8);
   });
 
-  it("authenticated official path: mitraShipments.ship reaches the mitra RPC (authenticated EXECUTE intact)", async () => {
+  it("authenticated official path: mitraShipments.ship ships a planned shipment and decrements production stock", async () => {
     const { data: before } = await admin
       .from("mitra_shipments")
       .select("status, shipped_at")
@@ -523,23 +527,122 @@ describe.skipIf(!RUN_LOCAL)("OPEN-3 mitra operational RPC execute scope", () => 
     expect(before?.status).toBe("planned");
     expect(before?.shipped_at).toBeNull();
     expect(await shipmentMovementCount(shipmentOne)).toBe(0);
-    const stockBefore = await stockQuantity();
+    expect(await stockQuantity()).toBe(8);
 
     const result = await mitraA.rpc("ship_mitra_shipment", {
       p_shipment_id: shipmentOne,
     });
-    expect(result.error).toBeTruthy();
-    expect(String(result.error?.code ?? "")).not.toMatch(/^PGRST/);
+    expect(result.error).toBeNull();
+    const first = (Array.isArray(result.data) ? result.data[0] : result.data) as
+      | {
+          shipment_id: string;
+          shipment_status: string;
+          shipment_quantity: number;
+          stock_quantity: number;
+          movement_id: string;
+          idempotent: boolean;
+        }
+      | null
+      | undefined;
+    expect(first).toBeTruthy();
+    expect(first!.shipment_id).toBe(shipmentOne);
+    expect(first!.shipment_status).toBe("shipped");
+    expect(first!.shipment_quantity).toBe(3);
+    expect(first!.stock_quantity).toBe(5);
+    expect(first!.movement_id).toBeTruthy();
+    expect(first!.idempotent).toBe(false);
 
     const { data: row } = await admin
       .from("mitra_shipments")
       .select("status, shipped_at")
       .eq("id", shipmentOne)
       .maybeSingle();
+    expect(row?.status).toBe("shipped");
+    expect(row?.shipped_at).toBeTruthy();
+    expect(await shipmentMovementCount(shipmentOne)).toBe(1);
+
+    const { data: movements } = await admin
+      .from("mitra_shipment_stock_movements")
+      .select("movement_type, quantity")
+      .eq("shipment_id", shipmentOne);
+    expect(movements).toHaveLength(1);
+    expect(movements?.[0].movement_type).toBe("shipment_shipped");
+    expect(movements?.[0].quantity).toBe(3);
+    expect(await stockQuantity()).toBe(5);
+  });
+
+  it("authenticated official path: mitraShipments.ship is idempotent", async () => {
+    const result = await mitraA.rpc("ship_mitra_shipment", {
+      p_shipment_id: shipmentOne,
+    });
+    expect(result.error).toBeNull();
+    const again = Array.isArray(result.data) ? result.data[0] : result.data;
+    expect(again?.idempotent).toBe(true);
+    expect(again?.shipment_status).toBe("shipped");
+    expect(await shipmentMovementCount(shipmentOne)).toBe(1);
+    expect(await stockQuantity()).toBe(5);
+    const { data: row } = await admin
+      .from("mitra_shipments")
+      .select("status")
+      .eq("id", shipmentOne)
+      .maybeSingle();
+    expect(row?.status).toBe("shipped");
+  });
+
+  it("authenticated official path: ship is rejected when production stock is insufficient", async () => {
+    expect(await shipmentMovementCount(shipmentTwo)).toBe(0);
+    const stockBefore = await stockQuantity();
+
+    const result = await mitraA.rpc("ship_mitra_shipment", {
+      p_shipment_id: shipmentTwo,
+    });
+    expect(isRejected(result)).toBe(true);
+    if (result.error) expect(result.error.code).toBe("22003");
+
+    const { data: row } = await admin
+      .from("mitra_shipments")
+      .select("status, shipped_at")
+      .eq("id", shipmentTwo)
+      .maybeSingle();
     expect(row?.status).toBe("planned");
     expect(row?.shipped_at).toBeNull();
-    expect(await shipmentMovementCount(shipmentOne)).toBe(0);
+    expect(await shipmentMovementCount(shipmentTwo)).toBe(0);
     expect(await stockQuantity()).toBe(stockBefore);
+  });
+
+  it("rejects ship by the distributor role and leaves the shipment untouched", async () => {
+    const distributorClient = await signIn(fixture[0]);
+    const result = await distributorClient.rpc("ship_mitra_shipment", {
+      p_shipment_id: shipmentTwo,
+    });
+    expect(isRejected(result)).toBe(true);
+    if (result.error) expect(result.error.code).toBe("42501");
+
+    const { data: row } = await admin
+      .from("mitra_shipments")
+      .select("status, shipped_at")
+      .eq("id", shipmentTwo)
+      .maybeSingle();
+    expect(row?.status).toBe("planned");
+    expect(row?.shipped_at).toBeNull();
+    expect(await shipmentMovementCount(shipmentTwo)).toBe(0);
+  });
+
+  it("rejects shipping a shipment outside the caller's tenant and leaves it unchanged", async () => {
+    const tenantB = await signIn(fixture[3]);
+    const result = await tenantB.rpc("ship_mitra_shipment", {
+      p_shipment_id: shipmentTwo,
+    });
+    expect(isRejected(result)).toBe(true);
+
+    const { data: row } = await admin
+      .from("mitra_shipments")
+      .select("status, shipped_at")
+      .eq("id", shipmentTwo)
+      .maybeSingle();
+    expect(row?.status).toBe("planned");
+    expect(row?.shipped_at).toBeNull();
+    expect(await shipmentMovementCount(shipmentTwo)).toBe(0);
   });
 
   it("anon cannot ship a real planned shipment and nothing changes", async () => {
