@@ -9,6 +9,7 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { KTP_CONTENT_TYPES } from "../shared/user-profile";
 import { getStockStatus, summarizeStock } from "../shared/consignment";
 import { calculateHppSummary, type HppComponent } from "../shared/hpp";
+import type { BudgetPeriod } from "../shared/budgets";
 import { z } from "zod";
 
 const roleSchema = z.enum(["distributor", "admin", "mitra_umkm", "supervisor", "sales_motoris", "hrd"]);
@@ -160,6 +161,7 @@ function toProduct(product: { id: string; distributor_id: string; created_by_mit
 const productionEventSelect = "id, distributor_id, mitra_user_id, product_id, production_date, budget_period, target_quantity, actual_quantity, damaged_quantity, yield_percentage, notes, result_notes, status, created_at, completed_at";
 const mitraShipmentSelect = "id, distributor_id, mitra_user_id, product_id, consignment_item_id, quantity, status, shipment_date, notes, created_at, updated_at, shipped_at, received_at, received_by, received_notes";
 const hppSelect = "id, distributor_id, mitra_user_id, product_id, components, output_quantity, total_raw_materials, total_supporting_materials, total_labor, total_production_cost, cost_per_unit, created_at, updated_at";
+const budgetSelect = "id, distributor_id, mitra_user_id, product_id, period, production_budget, production_target, created_at, updated_at";
 
 function toProductionEvent(event: { id: string; distributor_id: string; mitra_user_id: string; product_id: string; production_date: string; budget_period: string; target_quantity: number; actual_quantity?: number | null; damaged_quantity: number; yield_percentage?: number | null; notes: string; result_notes: string; status: string; created_at: string; completed_at?: string | null }) {
   return {
@@ -191,6 +193,16 @@ function toHpp(row: { product_id: string; components: HppComponent[] | null; out
     totalLabor: Number(row.total_labor),
     totalProductionCost: Number(row.total_production_cost),
     costPerUnit: Number(row.cost_per_unit),
+    updatedAt: row.updated_at,
+  } as const;
+}
+
+function toBudget(row: { product_id: string; period: string; production_budget: string | number; production_target: number; updated_at: string }) {
+  return {
+    productId: row.product_id,
+    period: row.period as BudgetPeriod,
+    productionBudget: Number(row.production_budget),
+    productionTarget: row.production_target,
     updatedAt: row.updated_at,
   } as const;
 }
@@ -1178,6 +1190,57 @@ export const appRouter = router({
           .single();
         if (error || !data) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "HPP produksi belum dapat disimpan." });
         return toHpp(data);
+      }),
+  }),
+  budgets: router({
+    list: supabaseProtectedProcedure.query(async ({ ctx }) => {
+      const role = callerRole(ctx);
+      if (role !== "mitra_umkm" && role !== "distributor" && role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Role ini tidak dapat melihat anggaran produksi." });
+      }
+
+      const distributorId = getDistributorId(ctx.supabaseUser);
+      if (!distributorId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja anggaran produksi tidak ditemukan." });
+      }
+
+      let query = getSupabaseAdminClient()
+        .from("mitra_production_budgets")
+        .select(budgetSelect)
+        .eq("distributor_id", distributorId)
+        .order("updated_at", { ascending: false });
+      if (role === "mitra_umkm") query = query.eq("mitra_user_id", ctx.supabaseUser!.id);
+
+      const { data, error } = await query;
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Anggaran produksi belum dapat dimuat." });
+
+      return (data ?? []).map(toBudget);
+    }),
+    upsert: supabaseProtectedProcedure
+      .input(z.object({
+        productId: z.string().uuid(),
+        period: z.enum(["Hari", "Minggu", "Bulan"]),
+        productionBudget: z.number().finite().min(0).max(9999999999999.99),
+        productionTarget: z.number().int().min(1, "Target produksi harus lebih besar dari 0.").max(1000000000),
+      }).strict())
+      .mutation(async ({ ctx, input }) => {
+        const { mitraUserId, distributorId } = requireMitraProductionContext(ctx);
+        await validateMitraProductionProduct(input.productId, mitraUserId, distributorId);
+        const { data, error } = await getSupabaseAdminClient()
+          .from("mitra_production_budgets")
+          .upsert({
+            distributor_id: distributorId,
+            mitra_user_id: mitraUserId,
+            product_id: input.productId,
+            period: input.period,
+            production_budget: input.productionBudget,
+            production_target: input.productionTarget,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "distributor_id,mitra_user_id,product_id,period" })
+          .select(budgetSelect)
+          .single();
+        if (error || !data) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Anggaran produksi belum dapat disimpan." });
+        return toBudget(data);
       }),
   }),
   mitraProductionStock: router({

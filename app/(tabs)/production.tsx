@@ -10,7 +10,7 @@ import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/hooks/use-auth";
 import { formatProductPrice, useMitraProducts } from "@/lib/mitra-products";
-import { saveMitraProductionBudget, type BudgetPeriod, useMitraProductionBudgets } from "@/lib/mitra-production-budgets";
+import { type BudgetPeriod, useMitraProductionBudgets } from "@/lib/mitra-production-budgets";
 import { dateKeyToMonthKey, formatBudgetPeriodSelection, getCalendarMonthDays, isDateInSelectedPeriod, parseDateKey, shiftCalendarMonth } from "@/lib/mitra-budget-period";
 import { useMitraProductionHpps } from "@/lib/mitra-production-hpp";
 import type { HppComponent, MitraProductionHpp } from "@/shared/hpp";
@@ -112,6 +112,15 @@ export default function ProductionScreen() {
     },
     onError: (mutationError) => setError(mutationError.message || "HPP belum dapat disimpan."),
   });
+  const saveBudgetMutation = trpc.budgets.upsert.useMutation({
+    onSuccess: async () => {
+      await utils.budgets.list.invalidate();
+      setError(null);
+      setSavedMessage("Pengaturan berhasil disimpan dan siap digunakan untuk Tambah Produksi.");
+      switchView("list");
+    },
+    onError: (mutationError) => setError(mutationError.message || "Pengaturan anggaran belum dapat disimpan."),
+  });
   const selectedProduct = products.find((product) => product.id === selectedProductId) ?? null;
   const budgetProduct = products.find((product) => product.id === budgetProductId) ?? null;
   const savedBudget = budgetProductId ? budgets.get(`${budgetProductId}:${budgetPeriod}`) : undefined;
@@ -194,16 +203,17 @@ export default function ProductionScreen() {
       setError("Pilih produk terlebih dahulu.");
       return;
     }
+    if (user?.role !== "mitra_umkm") {
+      setError("Anggaran produksi hanya dapat disimpan oleh Mitra.");
+      return;
+    }
     const budget = Number(budgetValue.replace(/[^0-9]/g, ""));
     const target = Number(budgetTarget.replace(/[^0-9]/g, ""));
     if (!budgetValue.trim() || !budgetTarget.trim() || !Number.isFinite(budget) || budget <= 0 || !Number.isFinite(target) || target <= 0) {
       setError("Masukkan anggaran dan target produksi yang lebih besar dari 0.");
       return;
     }
-    saveMitraProductionBudget({ productId: budgetProductId, period: budgetPeriod, productionBudget: budget, productionTarget: target });
-    setError(null);
-    setSavedMessage("Pengaturan berhasil disimpan dan siap digunakan untuk Tambah Produksi.");
-    switchView("list");
+    saveBudgetMutation.mutate({ productId: budgetProductId, period: budgetPeriod, productionBudget: budget, productionTarget: target });
   };
 
   const switchView = (nextView: ProductionView) => {
