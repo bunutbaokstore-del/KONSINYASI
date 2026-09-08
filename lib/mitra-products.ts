@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from "react";
+import { useMemo } from "react";
+import { trpc } from "./trpc";
 
 export type ProductStatus = "Aktif" | "Nonaktif";
 
@@ -12,61 +13,31 @@ export type MitraProduct = {
   status: ProductStatus;
 };
 
-export type NewMitraProduct = Omit<MitraProduct, "id">;
+type ProductDto = {
+  id: string;
+  name: string;
+  unit: string;
+  category: string | null;
+  size: string | null;
+  sellingPrice: number | null;
+  lifecycleStatus: string;
+};
 
-const DEFAULT_PRODUCTS: MitraProduct[] = [
-  {
-    id: "demo-kopi-arabika",
-    name: "Kopi Arabika Biji",
-    category: "Minuman",
-    unit: "Gram",
-    size: "250 g",
-    sellingPrice: 45000,
-    status: "Aktif",
-  },
-  {
-    id: "demo-keripik-pisang",
-    name: "Keripik Pisang Original",
-    category: "Makanan",
-    unit: "Pouch",
-    size: "100 g",
-    sellingPrice: 18000,
-    status: "Aktif",
-  },
-];
-
-let products = DEFAULT_PRODUCTS;
-const listeners = new Set<() => void>();
-
-function emitChange() {
-  listeners.forEach((listener) => listener());
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export function getMitraProducts() {
-  return products;
-}
-
-function getSnapshot() {
-  return getMitraProducts();
-}
-
-export function useMitraProducts() {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-}
-
-export function addMitraProduct(product: NewMitraProduct) {
-  const newProduct: MitraProduct = {
-    ...product,
-    id: `product-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+function toMitraProduct(dto: ProductDto): MitraProduct {
+  return {
+    id: dto.id,
+    name: dto.name,
+    category: dto.category ?? "",
+    unit: dto.unit,
+    size: dto.size ?? "",
+    sellingPrice: dto.sellingPrice ?? 0,
+    status: dto.lifecycleStatus === "active" ? "Aktif" : "Nonaktif",
   };
-  products = [...products, newProduct];
-  emitChange();
-  return newProduct;
+}
+
+export function useMitraProducts(): MitraProduct[] {
+  const query = trpc.products.list.useQuery(undefined);
+  return useMemo(() => (query.data ?? []).map(toMitraProduct), [query.data]);
 }
 
 export function formatProductPrice(price: number) {
