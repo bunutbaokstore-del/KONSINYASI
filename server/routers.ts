@@ -648,8 +648,34 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const distributorId = getDistributorId(ctx.supabaseUser);
         if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
-        const { error, count } = await getSupabaseAdminClient().from("consignment_items").delete({ count: "exact" }).eq("id", input.itemId).eq("distributor_id", distributorId);
-        if (error || count !== 1) throw new TRPCError({ code: "NOT_FOUND", message: "Barang titipan tidak ditemukan." });
+        const adminClient = getSupabaseAdminClient();
+        const { count: movementCount, error: movementError } = await adminClient
+          .from("stock_movements")
+          .select("id", { count: "exact", head: true })
+          .eq("item_id", input.itemId)
+          .eq("distributor_id", distributorId);
+        if (movementError) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Riwayat stok barang belum dapat diperiksa." });
+        }
+        const { count: requestCount, error: requestError } = await adminClient
+          .from("consignment_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("item_id", input.itemId)
+          .eq("distributor_id", distributorId);
+        if (requestError) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Pengajuan barang belum dapat diperiksa." });
+        }
+        if ((movementCount ?? 0) > 0 || (requestCount ?? 0) > 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Barang memiliki riwayat stok atau pengajuan. Barang tidak dapat dihapus." });
+        }
+        const { error, count } = await adminClient.from("consignment_items").delete({ count: "exact" }).eq("id", input.itemId).eq("distributor_id", distributorId);
+        if (error) {
+          if (error.code === "23503") {
+            throw new TRPCError({ code: "CONFLICT", message: "Barang sedang dirujuk shipment atau data terkait. Barang tidak dapat dihapus." });
+          }
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Barang belum dapat dihapus." });
+        }
+        if (count !== 1) throw new TRPCError({ code: "NOT_FOUND", message: "Barang titipan tidak ditemukan." });
         return { success: true } as const;
       }),
   }),
