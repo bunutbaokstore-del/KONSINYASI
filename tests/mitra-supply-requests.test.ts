@@ -26,7 +26,6 @@ const UI_SOURCES = [
   "components/mitra-distribution.tsx",
   "components/mitra-product-request.tsx",
   "app/supplier-requests.tsx",
-  "app/supply-approval.tsx",
 ];
 
 const LEGACY_SYMBOLS = [
@@ -127,12 +126,11 @@ describe("Mitra Supply Request persistent contract", () => {
     expect(supplierRequests).toContain("trpc.supplier.submitStockChange.useMutation()");
   });
 
-  it("UI reviews via trpc.supplier.review and invalidates supplier.requests after mutations", () => {
-    const supplyApproval = readSource("app/supply-approval.tsx");
+  it("UI reviews via trpc.supplier.adminReview only and refetches after mutations", () => {
     const supplierRequests = readSource("app/supplier-requests.tsx");
-    expect(supplyApproval).toContain("trpc.supplier.review.useMutation()");
-    expect(supplierRequests).toContain("trpc.supplier.review.useMutation()");
-    expect(supplyApproval).toContain("await utils.supplier.requests.invalidate()");
+    expect(supplierRequests).toContain("trpc.supplier.adminReview.useMutation()");
+    expect(supplierRequests).not.toContain("trpc.supplier.review");
+    expect(supplierRequests).toContain("await requestsQuery.refetch()");
     expect(readSource("components/mitra-product-shipment.tsx")).toContain("await utils.supplier.requests.invalidate()");
     expect(readSource("components/mitra-product-request.tsx")).toContain("await utils.supplier.requests.invalidate()");
   });

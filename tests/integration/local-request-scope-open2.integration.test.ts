@@ -535,7 +535,7 @@ describe.skipIf(!RUN_LOCAL)("OPEN-2 consignment request INSERT scope hardening",
     expect(row?.status).toBe("pending");
   });
 
-  it("lets only the owning Distributor review the pending request", async () => {
+  it("blocks every Distributor from reviewing because approval is now an Admin decision", async () => {
     const reason = "OPEN2 distributor review reason";
     const { data: created } = await mitraA
       .from("consignment_requests")
@@ -561,23 +561,23 @@ describe.skipIf(!RUN_LOCAL)("OPEN-2 consignment request INSERT scope hardening",
         decision: "rejected",
         reviewNote: "OPEN2 cross tenant note",
       }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     const { caller: distributorACaller } = await callerFor(fixture[0]);
-    const reviewed = await distributorACaller.supplier.review({
-      requestId,
-      decision: "rejected",
-      reviewNote: "OPEN2 legitimate review note",
-    });
-    expect(reviewed.status).toBe("rejected");
-    expect(reviewed.reviewNote).toBe("OPEN2 legitimate review note");
+    await expect(
+      distributorACaller.supplier.review({
+        requestId,
+        decision: "rejected",
+        reviewNote: "OPEN2 legitimate review note",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     const { data: row } = await admin
       .from("consignment_requests")
       .select("status, reviewed_by")
       .eq("id", requestId)
       .maybeSingle();
-    expect(row?.status).toBe("rejected");
-    expect(row?.reviewed_by).toBe(fixture[0].id);
+    expect(row?.status).toBe("pending");
+    expect(row?.reviewed_by).toBeNull();
   });
 });

@@ -289,13 +289,14 @@ describe.skipIf(!RUN_LOCAL)("WS-002 user deletion and audit trail integrity", ()
     });
     approvedRequestId = request.id;
 
-    const { caller: distributorCaller } = await callerFor(fixture[0]);
-    const review = await distributorCaller.supplier.review({
+    const { caller: adminCaller } = await callerFor(fixture[2]);
+    const review = await adminCaller.supplier.adminReview({
       requestId: approvedRequestId,
-      decision: "approved",
+      action: "approve",
       reviewNote: "WS-002 approved history",
     });
     expect(review.status).toBe("approved");
+    const { caller: distributorCaller } = await callerFor(fixture[0]);
 
     const { data: approvedRow } = await admin
       .from("consignment_requests")

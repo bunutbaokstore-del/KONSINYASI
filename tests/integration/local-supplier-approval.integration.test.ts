@@ -224,27 +224,43 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier Request New Item approval E2E", () =
       decision: "approved",
       reviewNote: "admin must not approve",
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const { data: submitNotifications, error: submitNotificationsError } = await admin
+      .from("notifications")
+      .select("recipient_user_id, notification_type, request_id")
+      .eq("request_id", requestAId)
+      .eq("notification_type", "request_pending");
+    expect(submitNotificationsError).toBeNull();
+    expect(submitNotifications).toHaveLength(1);
+    expect(submitNotifications?.[0]).toMatchObject({
+      recipient_user_id: fixture[2].id,
+      notification_type: "request_pending",
+      request_id: requestAId,
+    });
+
+    const { data: distributorSubmitNotifications } = await admin
+      .from("notifications")
+      .select("id")
+      .eq("request_id", requestAId)
+      .eq("recipient_user_id", fixture[0].id!);
+    expect(distributorSubmitNotifications).toEqual([]);
   });
 
-  it("approves New Item server-side and links Product Master to Consignment Item", async () => {
+  it("approves New Item as the final Admin decision and links Product Master to Consignment Item", async () => {
     const { caller: distributorCaller } = await callerFor(fixture[0]);
     const beforeProducts = await admin.from("products").select("id").eq("distributor_id", fixture[0].id!);
-    const review = await distributorCaller.supplier.review({
-      requestId: requestAId,
-      decision: "approved",
-      reviewNote: "approved by local Distributor",
-    });
-    expect(review.status).toBe("approved");
+    await approveAsAdmin(requestAId, "approved by local Admin");
 
     const { data: request, error: requestError } = await admin
       .from("consignment_requests")
-      .select("status, product_id, item_id, reviewed_by, review_note")
+      .select("status, product_id, item_id, reviewed_by, admin_reviewed_by, review_note")
       .eq("id", requestAId)
       .single();
     expect(requestError).toBeNull();
     expect(request?.status).toBe("approved");
-    expect(request?.reviewed_by).toBe(fixture[0].id);
-    expect(request?.review_note).toBe("approved by local Distributor");
+    expect(request?.reviewed_by).toBe(fixture[2].id);
+    expect(request?.admin_reviewed_by).toBe(fixture[2].id);
+    expect(request?.review_note).toBe("approved by local Admin");
     expect(request?.product_id).toBeTruthy();
     expect(request?.item_id).toBeTruthy();
 
@@ -281,7 +297,7 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier Request New Item approval E2E", () =
     expect(movementError).toBeNull();
     expect(movement?.movement_type).toBe("initial_stock");
     expect(movement?.item_id).toBe(request!.item_id);
-    expect(movement?.approved_by).toBe(fixture[0].id);
+    expect(movement?.approved_by).toBe(fixture[2].id);
     expect(movement?.resulting_stock).toBe(12);
 
     const { data: notification, error: notificationError } = await admin
@@ -297,10 +313,10 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier Request New Item approval E2E", () =
       requestId: requestAId,
       decision: "rejected",
       reviewNote: "duplicate review must fail",
-    })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("rejects Mitra review and preserves rejection without Product Master or Item", async () => {
+  it("rejects Mitra review and preserves Admin rejection without Product Master or Item", async () => {
     const { caller: mitraCaller } = await callerFor(fixture[3]);
     const submittedRequest = await mitraCaller.supplier.submitNewItem({
       name: "STEP2 REJECTION ITEM",
@@ -321,19 +337,34 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier Request New Item approval E2E", () =
       reviewNote: "mitra must not review",
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
-    const { caller: distributorCaller } = await callerFor(fixture[0]);
-    const rejection = await distributorCaller.supplier.review({
+    const { caller: adminCaller } = await callerFor(fixture[2]);
+    const rejection = await adminCaller.supplier.adminReview({
       requestId: rejectedRequestId,
-      decision: "rejected",
-      reviewNote: "rejected by local Distributor",
+      action: "reject",
+      reviewNote: "rejected by local Admin",
     });
     expect(rejection.status).toBe("rejected");
 
     const { data: rejectedRow } = await admin.from("consignment_requests").select("status, review_note, product_id, item_id").eq("id", rejectedRequestId).single();
     expect(rejectedRow?.status).toBe("rejected");
-    expect(rejectedRow?.review_note).toBe("rejected by local Distributor");
+    expect(rejectedRow?.review_note).toBe("rejected by local Admin");
     expect(rejectedRow?.product_id).toBeNull();
     expect(rejectedRow?.item_id).toBeNull();
+
+    const { data: rejectedNotifications } = await admin
+      .from("notifications")
+      .select("notification_type, recipient_user_id")
+      .eq("request_id", rejectedRequestId)
+      .eq("notification_type", "request_rejected");
+    expect(rejectedNotifications).toHaveLength(1);
+    expect(rejectedNotifications?.[0]).toMatchObject({ notification_type: "request_rejected", recipient_user_id: fixture[3].id });
+
+    const { caller: distributorCaller } = await callerFor(fixture[0]);
+    await expect(distributorCaller.supplier.review({
+      requestId: rejectedRequestId,
+      decision: "approved",
+      reviewNote: "distributor must not revive rejected request",
+    })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     const afterProducts = await admin.from("products").select("id").eq("distributor_id", fixture[0].id!);
     const afterItems = await admin.from("consignment_items").select("id").eq("mitra_user_id", fixture[3].id!);
@@ -365,11 +396,32 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier Request New Item approval E2E", () =
     return { itemId: itemId!, requestId: request.id };
   }
 
+  async function approveAsAdmin(requestId: string, reviewNote?: string) {
+    const { caller: adminCaller } = await callerFor(fixture[2]);
+    const approved = await adminCaller.supplier.adminReview({
+      requestId,
+      action: "approve",
+      ...(reviewNote ? { reviewNote } : {}),
+    });
+    expect(approved.status).toBe("approved");
+    expect(approved.adminReviewedBy).toBe(fixture[2].id!);
+    const { data: approvedNotification } = await admin
+      .from("notifications")
+      .select("notification_type, recipient_user_id")
+      .eq("request_id", requestId)
+      .eq("notification_type", "request_approved")
+      .eq("recipient_user_id", fixture[3].id!)
+      .single();
+    expect(approvedNotification?.notification_type).toBe("request_approved");
+    expect(approvedNotification?.recipient_user_id).toBe(fixture[3].id);
+    return approved;
+  }
+
   it("approves stock_change with an increase and records canonical movement and notification", async () => {
     const { itemId, requestId } = await prepareStockChange(10, 15, "Increase stock for lifecycle test");
+    await approveAsAdmin(requestId, "approved increase by Admin");
     const { caller: distributorCaller } = await callerFor(fixture[0]);
-    const review = await distributorCaller.supplier.review({ requestId, decision: "approved", reviewNote: "approved increase" });
-    expect(review.status).toBe("approved");
+    await expect(distributorCaller.supplier.review({ requestId, decision: "approved", reviewNote: "distributor must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     const { data: item } = await admin.from("consignment_items").select("stock_quantity").eq("id", itemId).single();
     expect(item?.stock_quantity).toBe(15);
@@ -388,7 +440,7 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier Request New Item approval E2E", () =
       item_id: itemId,
       mitra_user_id: fixture[3].id,
       distributor_id: fixture[0].id,
-      approved_by: fixture[0].id,
+      approved_by: fixture[2].id,
     });
     const { data: notifications, error: notificationError } = await admin
       .from("notifications")
@@ -409,8 +461,9 @@ expect(approvedNotifications?.[0]).toMatchObject({
 
   it("approves stock_change with a decrease and records the negative delta", async () => {
     const { itemId, requestId } = await prepareStockChange(10, 4, "Decrease stock for lifecycle test");
+    await approveAsAdmin(requestId, "approved decrease by Admin");
     const { caller: distributorCaller } = await callerFor(fixture[0]);
-    await expect(distributorCaller.supplier.review({ requestId, decision: "approved", reviewNote: "approved decrease" })).resolves.toMatchObject({ status: "approved" });
+    await expect(distributorCaller.supplier.review({ requestId, decision: "approved", reviewNote: "distributor must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     const { data: item } = await admin.from("consignment_items").select("stock_quantity").eq("id", itemId).single();
     expect(item?.stock_quantity).toBe(4);
     const { data: movements } = await admin
@@ -427,7 +480,7 @@ expect(approvedNotifications?.[0]).toMatchObject({
       item_id: itemId,
       mitra_user_id: fixture[3].id,
       distributor_id: fixture[0].id,
-      approved_by: fixture[0].id,
+      approved_by: fixture[2].id,
     });
     const { data: notifications, error: notificationError } = await admin
       .from("notifications")
@@ -448,8 +501,9 @@ expect(approvedNotifications?.[0]).toMatchObject({
 
   it("approves stock_change with unchanged quantity and records a zero delta", async () => {
     const { itemId, requestId } = await prepareStockChange(10, 10, "Keep stock for lifecycle test");
+    await approveAsAdmin(requestId, "approved unchanged by Admin");
     const { caller: distributorCaller } = await callerFor(fixture[0]);
-    await expect(distributorCaller.supplier.review({ requestId, decision: "approved", reviewNote: "approved unchanged" })).resolves.toMatchObject({ status: "approved" });
+    await expect(distributorCaller.supplier.review({ requestId, decision: "approved", reviewNote: "distributor must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     const { data: item } = await admin.from("consignment_items").select("stock_quantity").eq("id", itemId).single();
     expect(item?.stock_quantity).toBe(10);
     const { data: movements } = await admin.from("stock_movements").select("movement_type, previous_stock, change_quantity, resulting_stock").eq("request_id", requestId);
@@ -460,15 +514,15 @@ expect(approvedNotifications?.[0]).toMatchObject({
   it("rejects stock_change without changing stock or creating a movement", async () => {
     const { itemId, requestId } = await prepareStockChange(10, 4, "Reject stock change for lifecycle test");
     const { data: beforeMovements } = await admin.from("stock_movements").select("id").eq("item_id", itemId);
-    const { caller: distributorCaller } = await callerFor(fixture[0]);
-    const rejection = await distributorCaller.supplier.review({ requestId, decision: "rejected", reviewNote: "rejected stock change" });
+    const { caller: adminCaller } = await callerFor(fixture[2]);
+    const rejection = await adminCaller.supplier.adminReview({ requestId, action: "reject", reviewNote: "rejected stock change by Admin" });
     expect(rejection.status).toBe("rejected");
     const { data: item } = await admin.from("consignment_items").select("stock_quantity").eq("id", itemId).single();
     expect(item?.stock_quantity).toBe(10);
     const { data: afterMovements } = await admin.from("stock_movements").select("id").eq("item_id", itemId);
     expect(afterMovements).toHaveLength(beforeMovements?.length ?? 0);
     const { data: request } = await admin.from("consignment_requests").select("status, review_note").eq("id", requestId).single();
-    expect(request).toMatchObject({ status: "rejected", review_note: "rejected stock change" });
+    expect(request).toMatchObject({ status: "rejected", review_note: "rejected stock change by Admin" });
     const { data: notifications } = await admin.from("notifications").select("notification_type, recipient_user_id, request_id, distributor_id").eq("request_id", requestId);
     const rejectedNotifications = notifications?.filter(
   (notification) => notification.notification_type === "request_rejected",
@@ -480,12 +534,11 @@ expect(rejectedNotifications?.[0]).toMatchObject({
 
   it("rejects sequential replay for approved and rejected stock_change requests", async () => {
     const approved = await prepareStockChange(10, 15, "Replay approved stock change");
-    const { caller: distributorCaller } = await callerFor(fixture[0]);
-    await distributorCaller.supplier.review({ requestId: approved.requestId, decision: "approved", reviewNote: "first approval" });
+    await approveAsAdmin(approved.requestId, "first approval");
     const { data: approvedBefore } = await admin.from("consignment_items").select("stock_quantity").eq("id", approved.itemId).single();
     const { data: approvedMovementsBefore } = await admin.from("stock_movements").select("id").eq("request_id", approved.requestId);
     const { data: approvedNotificationsBefore } = await admin.from("notifications").select("id").eq("request_id", approved.requestId);
-    await expect(distributorCaller.supplier.review({ requestId: approved.requestId, decision: "rejected", reviewNote: "replay must fail" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(approveAsAdmin(approved.requestId, "replay must fail")).rejects.toMatchObject({ code: "BAD_REQUEST" });
     const { data: approvedAfter } = await admin.from("consignment_items").select("stock_quantity").eq("id", approved.itemId).single();
     const { data: approvedMovementsAfter } = await admin.from("stock_movements").select("id").eq("request_id", approved.requestId);
     const { data: approvedNotificationsAfter } = await admin.from("notifications").select("id").eq("request_id", approved.requestId);
@@ -494,11 +547,13 @@ expect(rejectedNotifications?.[0]).toMatchObject({
     expect(approvedNotificationsAfter).toHaveLength(approvedNotificationsBefore?.length ?? 0);
 
     const rejected = await prepareStockChange(10, 4, "Replay rejected stock change");
-    await distributorCaller.supplier.review({ requestId: rejected.requestId, decision: "rejected", reviewNote: "first rejection" });
+    const { caller: adminRejectionCaller } = await callerFor(fixture[2]);
+    const firstRejection = await adminRejectionCaller.supplier.adminReview({ requestId: rejected.requestId, action: "reject", reviewNote: "first rejection" });
+    expect(firstRejection.status).toBe("rejected");
     const { data: rejectedBefore } = await admin.from("consignment_items").select("stock_quantity").eq("id", rejected.itemId).single();
     const { data: rejectedMovementsBefore } = await admin.from("stock_movements").select("id").eq("request_id", rejected.requestId);
     const { data: rejectedNotificationsBefore } = await admin.from("notifications").select("id").eq("request_id", rejected.requestId);
-    await expect(distributorCaller.supplier.review({ requestId: rejected.requestId, decision: "approved", reviewNote: "replay must fail" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(approveAsAdmin(rejected.requestId, "replay must fail")).rejects.toMatchObject({ code: "BAD_REQUEST" });
     const { data: rejectedAfter } = await admin.from("consignment_items").select("stock_quantity").eq("id", rejected.itemId).single();
     const { data: rejectedMovementsAfter } = await admin.from("stock_movements").select("id").eq("request_id", rejected.requestId);
     const { data: rejectedNotificationsAfter } = await admin.from("notifications").select("id").eq("request_id", rejected.requestId);
@@ -506,20 +561,20 @@ expect(rejectedNotifications?.[0]).toMatchObject({
     expect(rejectedMovementsAfter).toHaveLength(rejectedMovementsBefore?.length ?? 0);
     expect(rejectedNotificationsAfter).toHaveLength(rejectedNotificationsBefore?.length ?? 0);
   });
-it("allows only one concurrent approval for the same stock_change request", async () => {
+it("allows only one concurrent Admin approval for the same stock_change request", async () => {
   const prepared = await prepareStockChange(10, 15, "Concurrent approval test");
-  const { caller: distributorCallerA } = await callerFor(fixture[0]);
-  const { caller: distributorCallerB } = await callerFor(fixture[0]);
+  const { caller: adminCallerA } = await callerFor(fixture[2]);
+  const { caller: adminCallerB } = await callerFor(fixture[2]);
 
   const results = await Promise.allSettled([
-    distributorCallerA.supplier.review({
+    adminCallerA.supplier.adminReview({
       requestId: prepared.requestId,
-      decision: "approved",
+      action: "approve",
       reviewNote: "concurrent approval A",
     }),
-    distributorCallerB.supplier.review({
+    adminCallerB.supplier.adminReview({
       requestId: prepared.requestId,
-      decision: "approved",
+      action: "approve",
       reviewNote: "concurrent approval B",
     }),
   ]);
@@ -599,7 +654,7 @@ it("allows only one concurrent approval for the same stock_change request", asyn
     await expect(adminCaller.supplier.review({ requestId: pending.id, decision: "approved", reviewNote: "admin must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(mitraSameWorkspace.supplier.review({ requestId: pending.id, decision: "approved", reviewNote: "mitra must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     const { caller: distributorB } = await callerFor(fixture[1]);
-    await expect(distributorB.supplier.review({ requestId: pending.id, decision: "approved", reviewNote: "wrong distributor must fail" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(distributorB.supplier.review({ requestId: pending.id, decision: "approved", reviewNote: "wrong distributor must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     await expect(mitraA.supplier.submitStockChange({ itemId: sameWorkspaceItem!.id, proposedStockQuantity: -1, reason: "negative quantity" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(mitraA.supplier.submitStockChange({ itemId: sameWorkspaceItem!.id, proposedStockQuantity: 1.5 as number, reason: "decimal quantity" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
@@ -633,7 +688,7 @@ it("allows only one concurrent approval for the same stock_change request", asyn
       requestId: requestBId,
       decision: "approved",
       reviewNote: "cross tenant must fail",
-    })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     const forgedReviewer = await admin.rpc("review_consignment_request", {
       p_request_id: requestBId,
@@ -711,21 +766,22 @@ it("allows only one concurrent approval for the same stock_change request", asyn
     expect(reviewNotificationsBefore).toEqual([]);
 
     const { caller: distributorCaller } = await callerFor(fixture[0]);
-    const review = await distributorCaller.supplier.review({
+    await approveAsAdmin(ws001RequestId, "admin approved after direct UPDATE rejection");
+    await expect(distributorCaller.supplier.review({
       requestId: ws001RequestId,
       decision: "approved",
-      reviewNote: "official RPC review after direct UPDATE rejection",
-    });
-    expect(review.status).toBe("approved");
+      reviewNote: "distributor must fail after direct UPDATE rejection",
+    })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     const { data: reviewedRequest, error: reviewedRequestError } = await admin
       .from("consignment_requests")
-      .select("status, reviewed_by, reviewed_at, item_id, product_id")
+      .select("status, reviewed_by, admin_reviewed_by, reviewed_at, item_id, product_id")
       .eq("id", ws001RequestId)
       .single();
     expect(reviewedRequestError).toBeNull();
     expect(reviewedRequest?.status).toBe("approved");
-    expect(reviewedRequest?.reviewed_by).toBe(fixture[0].id);
+    expect(reviewedRequest?.reviewed_by).toBe(fixture[2].id);
+    expect(reviewedRequest?.admin_reviewed_by).toBe(fixture[2].id);
     expect(reviewedRequest?.reviewed_at).toBeTruthy();
     expect(reviewedRequest?.item_id).toBeTruthy();
     expect(reviewedRequest?.product_id).toBeTruthy();
@@ -741,7 +797,7 @@ it("allows only one concurrent approval for the same stock_change request", asyn
       request_id: ws001RequestId,
       mitra_user_id: fixture[3].id,
       distributor_id: fixture[0].id,
-      approved_by: fixture[0].id,
+      approved_by: fixture[2].id,
     });
 
     const { data: reviewNotificationsAfter, error: reviewNotificationsAfterError } = await admin

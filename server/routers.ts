@@ -98,20 +98,14 @@ async function notifyWorkspaceAdmins(distributorId: string, requestId: string, t
   const { data, error } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Pesan masuk Admin belum dapat dibuat." });
   const recipientIds = data.users
-    .filter((user) => {
-      const userRole = getUserRole(user);
-      if (userRole === "distributor") {
-        return user.id === distributorId;
-      }
-      return userRole === "admin" && user.app_metadata?.distributor_id === distributorId;
-    })
+    .filter((user) => getUserRole(user) === "admin" && user.app_metadata?.distributor_id === distributorId)
     .map((user) => user.id);
   if (!recipientIds.length) return;
   const { error: notificationError } = await adminClient.from("notifications").insert(recipientIds.map((recipientUserId) => ({ recipient_user_id: recipientUserId, distributor_id: distributorId, request_id: requestId, notification_type: "request_pending", title, body })));
   if (notificationError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Pesan masuk Admin belum dapat dibuat." });
 }
 
-function toSupplierRequest(request: { id: string; request_type: string; item_id?: string | null; product_id?: string | null; proposed_name?: string | null; proposed_sku?: string | null; proposed_unit?: string | null; proposed_stock_quantity?: number | null; proposed_minimum_stock?: number | null; reason: string; status: string; review_note?: string | null; reviewed_at?: string | null; created_at: string; mitra_user_id: string }) {
+function toSupplierRequest(request: { id: string; request_type: string; item_id?: string | null; product_id?: string | null; proposed_name?: string | null; proposed_sku?: string | null; proposed_unit?: string | null; proposed_stock_quantity?: number | null; proposed_minimum_stock?: number | null; proposed_category?: string | null; proposed_size?: string | null; proposed_selling_price?: string | number | null; reason: string; status: string; admin_reviewed_by?: string | null; admin_reviewed_at?: string | null; review_note?: string | null; reviewed_at?: string | null; created_at: string; mitra_user_id: string }) {
   return {
     id: request.id,
     requestType: request.request_type,
@@ -123,8 +117,13 @@ function toSupplierRequest(request: { id: string; request_type: string; item_id?
     proposedUnit: request.proposed_unit ?? null,
     proposedStockQuantity: request.proposed_stock_quantity ?? null,
     proposedMinimumStock: request.proposed_minimum_stock ?? null,
+    proposedCategory: request.proposed_category ?? null,
+    proposedSize: request.proposed_size ?? null,
+    proposedSellingPrice: request.proposed_selling_price == null ? null : Number(request.proposed_selling_price),
     reason: request.reason,
     status: request.status,
+    adminReviewedBy: request.admin_reviewed_by ?? null,
+    adminReviewedAt: request.admin_reviewed_at ?? null,
     reviewNote: request.review_note ?? null,
     reviewedAt: request.reviewed_at ?? null,
     createdAt: request.created_at,
@@ -741,10 +740,10 @@ export const appRouter = router({
     requests: supabaseProtectedProcedure.query(async ({ ctx }) => {
       const role = callerRole(ctx);
       const distributorId = getDistributorId(ctx.supabaseUser);
-      if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja supplier tidak ditemukan." });
+      if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja tidak ditemukan." });
       let query = getSupabaseAdminClient()
         .from("consignment_requests")
-        .select("id, request_type, item_id, product_id, mitra_user_id, proposed_name, proposed_sku, proposed_unit, proposed_stock_quantity, proposed_minimum_stock, reason, status, review_note, reviewed_at, created_at")
+        .select("id, request_type, item_id, product_id, mitra_user_id, proposed_name, proposed_sku, proposed_unit, proposed_stock_quantity, proposed_minimum_stock, proposed_category, proposed_size, proposed_selling_price, reason, status, admin_reviewed_by, admin_reviewed_at, review_note, reviewed_at, created_at")
         .eq("distributor_id", distributorId)
         .order("created_at", { ascending: false });
       if (role === "mitra_umkm") query = query.eq("mitra_user_id", ctx.supabaseUser.id);
@@ -765,8 +764,8 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         if (callerRole(ctx) !== "mitra_umkm") throw new TRPCError({ code: "FORBIDDEN", message: "Hanya Mitra UMKM yang dapat mengajukan barang." });
         const distributorId = getDistributorId(ctx.supabaseUser);
-        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja supplier tidak ditemukan." });
-        const { data, error } = await getSupabaseAdminClient().from("consignment_requests").insert({ distributor_id: distributorId, mitra_user_id: ctx.supabaseUser.id, request_type: "new_item", proposed_name: input.name, proposed_sku: input.sku || null, proposed_unit: input.unit, proposed_stock_quantity: input.proposedStockQuantity, proposed_minimum_stock: input.proposedMinimumStock, reason: input.reason, status: "pending" }).select("id, request_type, item_id, product_id, mitra_user_id, proposed_name, proposed_sku, proposed_unit, proposed_stock_quantity, proposed_minimum_stock, reason, status, review_note, reviewed_at, created_at").single();
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja mitra tidak ditemukan." });
+        const { data, error } = await getSupabaseAdminClient().from("consignment_requests").insert({ distributor_id: distributorId, mitra_user_id: ctx.supabaseUser.id, request_type: "new_item", proposed_name: input.name, proposed_sku: input.sku || null, proposed_unit: input.unit, proposed_stock_quantity: input.proposedStockQuantity, proposed_minimum_stock: input.proposedMinimumStock, reason: input.reason, status: "pending" }).select("id, request_type, item_id, product_id, mitra_user_id, proposed_name, proposed_sku, proposed_unit, proposed_stock_quantity, proposed_minimum_stock, proposed_category, proposed_size, proposed_selling_price, reason, status, admin_reviewed_by, admin_reviewed_at, review_note, reviewed_at, created_at").single();
         if (error || !data) throw new TRPCError({ code: "BAD_REQUEST", message: "Pengajuan barang belum dapat dikirim." });
         const mitraName = typeof ctx.supabaseUser.user_metadata?.full_name === "string" && ctx.supabaseUser.user_metadata.full_name.trim() ? ctx.supabaseUser.user_metadata.full_name.trim() : "Mitra UMKM";
         await notifyWorkspaceAdmins(distributorId, data.id, "Pengajuan barang baru", `${mitraName} mengajukan barang “${input.name}” untuk diperiksa.`);
@@ -777,10 +776,10 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         if (callerRole(ctx) !== "mitra_umkm") throw new TRPCError({ code: "FORBIDDEN", message: "Hanya Mitra UMKM yang dapat mengajukan perubahan stok." });
         const distributorId = getDistributorId(ctx.supabaseUser);
-        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja supplier tidak ditemukan." });
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja mitra tidak ditemukan." });
         const { data: item } = await getSupabaseAdminClient().from("consignment_items").select("id").eq("id", input.itemId).eq("mitra_user_id", ctx.supabaseUser.id).eq("distributor_id", distributorId).maybeSingle();
         if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Barang supplier tidak ditemukan." });
-        const { data, error } = await getSupabaseAdminClient().from("consignment_requests").insert({ distributor_id: distributorId, mitra_user_id: ctx.supabaseUser.id, item_id: input.itemId, request_type: "stock_change", proposed_stock_quantity: input.proposedStockQuantity, reason: input.reason, status: "pending" }).select("id, request_type, item_id, product_id, mitra_user_id, proposed_name, proposed_sku, proposed_unit, proposed_stock_quantity, proposed_minimum_stock, reason, status, review_note, reviewed_at, created_at").single();
+        const { data, error } = await getSupabaseAdminClient().from("consignment_requests").insert({ distributor_id: distributorId, mitra_user_id: ctx.supabaseUser.id, item_id: input.itemId, request_type: "stock_change", proposed_stock_quantity: input.proposedStockQuantity, reason: input.reason, status: "pending" }).select("id, request_type, item_id, product_id, mitra_user_id, proposed_name, proposed_sku, proposed_unit, proposed_stock_quantity, proposed_minimum_stock, proposed_category, proposed_size, proposed_selling_price, reason, status, admin_reviewed_by, admin_reviewed_at, review_note, reviewed_at, created_at").single();
         if (error || !data) throw new TRPCError({ code: "BAD_REQUEST", message: "Pengajuan perubahan stok belum dapat dikirim." });
         const mitraName = typeof ctx.supabaseUser.user_metadata?.full_name === "string" && ctx.supabaseUser.user_metadata.full_name.trim() ? ctx.supabaseUser.user_metadata.full_name.trim() : "Mitra UMKM";
         await notifyWorkspaceAdmins(distributorId, data.id, "Pengajuan perubahan stok", `${mitraName} mengajukan perubahan stok menjadi ${input.proposedStockQuantity}.`);
@@ -788,34 +787,39 @@ export const appRouter = router({
       }),
     review: distributorProcedure
       .input(z.object({ requestId: z.string().uuid(), decision: z.enum(["approved", "rejected"]), reviewNote: z.string().trim().max(500).optional() }))
+      .mutation(async () => {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Keputusan pengajuan kini menjadi kewenangan Administrator." });
+      }),
+    adminReview: supabaseProtectedProcedure
+      .input(z.object({ requestId: z.string().uuid(), action: z.enum(["approve", "reject", "forward"]), reviewNote: z.string().trim().max(500).optional() }))
       .mutation(async ({ ctx, input }) => {
+        if (callerRole(ctx) !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Hanya Administrator yang dapat memproses review pengajuan." });
         const distributorId = getDistributorId(ctx.supabaseUser);
-        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja supplier tidak ditemukan." });
-        const reviewerId = ctx.supabaseUser?.id;
-        if (!reviewerId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sesi Admin tidak ditemukan." });
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Administrator tidak ditemukan." });
+        const adminId = ctx.supabaseUser?.id;
+        if (!adminId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sesi Administrator tidak ditemukan." });
         const adminClient = getSupabaseAdminClient();
-        const { data: rpcData, error: rpcError } = await adminClient.rpc("review_consignment_request", {
+        const effectiveAction = input.action === "forward" ? "approve" : input.action;
+        const { error: rpcError } = await adminClient.rpc("admin_review_consignment_request", {
           p_request_id: input.requestId,
           p_distributor_id: distributorId,
-          p_reviewer_id: reviewerId,
-          p_decision: input.decision,
-          p_review_note: input.reviewNote?.trim() || null,
+          p_admin_id: adminId,
+          p_action: effectiveAction,
+          p_note: input.reviewNote?.trim() || null,
         });
 
         if (rpcError) {
           if (rpcError.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: "Anda tidak berwenang memproses pengajuan ini." });
           if (rpcError.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: "Pengajuan tidak ditemukan." });
           if (rpcError.code === "P0001") throw new TRPCError({ code: "BAD_REQUEST", message: "Pengajuan ini sudah diproses." });
+          if (rpcError.code === "22023") throw new TRPCError({ code: "BAD_REQUEST", message: "Aksi review tidak valid." });
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Keputusan pengajuan belum dapat diproses." });
         }
 
-        const rpcResult = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-        if (!rpcResult) throw new TRPCError({ code: "NOT_FOUND", message: "Pengajuan tidak ditemukan." });
-
         const { data: request, error: requestError } = await adminClient
           .from("consignment_requests")
-          .select("id, request_type, item_id, product_id, mitra_user_id, proposed_name, proposed_sku, proposed_unit, proposed_stock_quantity, proposed_minimum_stock, reason, status, review_note, reviewed_at, created_at")
-          .eq("id", rpcResult.request_id)
+          .select("id, request_type, item_id, product_id, mitra_user_id, proposed_name, proposed_sku, proposed_unit, proposed_stock_quantity, proposed_minimum_stock, proposed_category, proposed_size, proposed_selling_price, reason, status, admin_reviewed_by, admin_reviewed_at, review_note, reviewed_at, created_at")
+          .eq("id", input.requestId)
           .eq("distributor_id", distributorId)
           .maybeSingle();
         if (requestError || !request) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Hasil keputusan belum dapat dimuat." });
@@ -1289,60 +1293,6 @@ export const appRouter = router({
         };
       });
     }),
-  }),
-  productApproval: router({
-    notifyDistributor: supabaseProtectedProcedure
-      .input(z.object({
-        requestId: z.string().uuid(),
-        title: z.string().trim().min(1).max(120),
-        body: z.string().trim().min(1).max(500),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        if (callerRole(ctx) !== "admin") {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Hanya Administrator yang dapat mengirim informasi approval." });
-        }
-
-        const distributorId = getDistributorId(ctx.supabaseUser);
-        if (!distributorId) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Administrator tidak ditemukan." });
-        }
-
-        const adminClient = getSupabaseAdminClient();
-        const { data: request, error: requestError } = await adminClient
-          .from("consignment_requests")
-          .select("id, distributor_id, status")
-          .eq("id", input.requestId)
-          .eq("distributor_id", distributorId)
-          .maybeSingle();
-        if (requestError || !request) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Pengajuan tidak ditemukan dalam ruang kerja Administrator." });
-        }
-        if (request.status !== "pending") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Informasi hanya dapat dikirim untuk pengajuan yang masih menunggu approval." });
-        }
-
-        const { data: distributor, error: distributorError } = await adminClient.auth.admin.getUserById(distributorId);
-        if (distributorError || !distributor.user || getUserRole(distributor.user) !== "distributor") {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Distributor dalam ruang kerja ini tidak ditemukan." });
-        }
-
-        const { data, error } = await adminClient
-          .from("notifications")
-          .insert({
-            recipient_user_id: distributorId,
-            distributor_id: distributorId,
-            request_id: request.id,
-            notification_type: "request_pending",
-            title: input.title,
-            body: input.body,
-          })
-          .select("id, notification_type, title, body, is_read, request_id, created_at")
-          .single();
-        if (error || !data) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Informasi belum dapat dikirim kepada Distributor." });
-        }
-        return toNotification(data);
-      }),
   }),
   mitraDashboard: router({
     stock: supabaseProtectedProcedure.query(async ({ ctx }) => {
