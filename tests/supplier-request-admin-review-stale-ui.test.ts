@@ -18,6 +18,32 @@ describe("supplier request admin review stale-card fix (frontend wiring)", () =>
     expect(screen).toContain("trpcUtils.supplier.requests.invalidate()");
   });
 
+  it("invalidates the product catalog queries used by Katalog Produk after approval", () => {
+    expect(screen).toContain("trpcUtils.products.list.invalidate()");
+    expect(screen).toContain("trpcUtils.hpp.list.invalidate()");
+    expect(screen).toContain("trpcUtils.mitraDashboard.stock.invalidate()");
+  });
+
+  it("calls the catalog invalidation right after a successful approval", () => {
+    const normalized = screen.replace(/\s+/g, " ");
+    expect(normalized).toContain("setPendingAdmin(null); await invalidateRequests(); await invalidateCatalogQueries();");
+  });
+
+  it("refreshes the catalog when the card turned out to be already processed", () => {
+    const normalized = screen.replace(/\s+/g, " ");
+    expect(normalized).toContain("outcome.kind === \"processed\") { await invalidateRequests(); await invalidateCatalogQueries(); setNotice(outcome.message); }");
+  });
+
+  it("performs no optimistic update after an approval", () => {
+    expect(screen).not.toMatch(/setData\(/);
+    expect(screen).not.toMatch(/cancelQueries\(/);
+  });
+
+  it("keeps approve and reject as the only admin actions", () => {
+    expect(screen).toContain('pendingAdmin?.action === "approve" ? "Setujui" : "Tolak"');
+    expect(screen).not.toContain('"forward"');
+  });
+
   it("runs a refetch when the mutation is rejected and reconciles the stale card", () => {
     expect(screen).toContain("const result = await requestsQuery.refetch();");
     expect(screen).toContain("resolveAdminReviewFailure({ adminError, refetchFailed, requests: freshData, requestId });");

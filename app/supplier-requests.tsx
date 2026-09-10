@@ -104,6 +104,13 @@ function AdminReviewView({ colors, requestsQuery, onBack, requestId, scrollRef }
     setPendingAdmin({ requestId, action, reviewNote: "" });
   };
   const invalidateRequests = async () => { await trpcUtils.supplier.requests.invalidate(); };
+  const invalidateCatalogQueries = async () => {
+    await Promise.all([
+      trpcUtils.products.list.invalidate(),
+      trpcUtils.hpp.list.invalidate(),
+      trpcUtils.mitraDashboard.stock.invalidate(),
+    ]);
+  };
   const executeAdmin = async () => {
     if (!pendingAdmin || adminReviewMutation.isPending) return;
     const requestId = pendingAdmin.requestId;
@@ -119,6 +126,7 @@ function AdminReviewView({ colors, requestsQuery, onBack, requestId, scrollRef }
       await adminReviewMutation.mutateAsync(pendingAdmin);
       setPendingAdmin(null);
       await invalidateRequests();
+      await invalidateCatalogQueries();
     } catch (adminError) {
       setPendingAdmin(null);
       let refetchFailed = false;
@@ -133,6 +141,7 @@ function AdminReviewView({ colors, requestsQuery, onBack, requestId, scrollRef }
       const outcome = resolveAdminReviewFailure({ adminError, refetchFailed, requests: freshData, requestId });
       if (outcome.kind === "processed") {
         await invalidateRequests();
+        await invalidateCatalogQueries();
         setNotice(outcome.message);
       } else if (outcome.kind === "refetchFailed") {
         setError(outcome.message);
