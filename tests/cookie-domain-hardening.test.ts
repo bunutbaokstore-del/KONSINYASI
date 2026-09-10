@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Request } from "express";
 import { getOauthInitCookieOptions, getSessionCookieOptions } from "../server/_core/cookies";
-import { COOKIE_NAME, OAUTH_INIT_COOKIE_NAME } from "../shared/const";
+import { COOKIE_NAME, LEGACY_SESSION_DURATION_MS, OAUTH_INIT_COOKIE_NAME } from "../shared/const";
 
 const PREVIEW_HOST = "3000-abc.manuspre.computer";
 const PROD_HOST = "3000-prod.manuspre.computer";
@@ -50,7 +50,10 @@ function hostOnlyCookieHeader(jar: { host: string; raw: string }[], requestHost:
 function buildApp() {
   const app = express();
   app.get("/api/set-session", (req, res) => {
-    res.cookie(COOKIE_NAME, "session-jwt-value", { ...getSessionCookieOptions(req), maxAge: 365 * 24 * 60 * 60 * 1000 });
+    res.cookie(COOKIE_NAME, "session-jwt-value", {
+      ...getSessionCookieOptions(req),
+      maxAge: LEGACY_SESSION_DURATION_MS,
+    });
     res.json({ ok: true });
   });
   app.get("/api/set-oauth-init", (req, res) => {
@@ -176,7 +179,8 @@ describe("F4 cookie domain hardening (host-only cookies)", () => {
     expect(attrs.get("samesite")?.toLowerCase()).toBe("none");
     expect(attrs.get("httponly")).toBeDefined();
     expect(attrs.get("secure")).toBeDefined();
-    expect(attrs.has("max-age")).toBe(true);
+    // 30-day legacy session: LEGACY_SESSION_DURATION_MS serialized as Max-Age in seconds.
+    expect(attrs.get("max-age")).toBe(String(LEGACY_SESSION_DURATION_MS / 1000));
   });
 
   it("E2. oauth_init raw Set-Cookie is host-only, SameSite=Lax, 5-minute TTL", async () => {

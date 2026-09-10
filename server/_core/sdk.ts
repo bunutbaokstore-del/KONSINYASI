@@ -1,4 +1,4 @@
-import { AXIOS_TIMEOUT_MS, COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const.js";
+import { AXIOS_TIMEOUT_MS, COOKIE_NAME, LEGACY_SESSION_DURATION_MS } from "../../shared/const.js";
 import { ForbiddenError } from "../../shared/_core/errors.js";
 import axios, { type AxiosInstance } from "axios";
 import { parse as parseCookieHeader } from "cookie";
@@ -159,7 +159,7 @@ class SDKServer {
     options: { expiresInMs?: number } = {},
   ): Promise<string> {
     const issuedAt = Date.now();
-    const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
+    const expiresInMs = options.expiresInMs ?? LEGACY_SESSION_DURATION_MS;
     const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1000);
     const secretKey = this.getSessionSecret();
 

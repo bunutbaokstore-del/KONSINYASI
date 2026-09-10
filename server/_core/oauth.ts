@@ -1,4 +1,4 @@
-import { COOKIE_NAME, OAUTH_INIT_COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const.js";
+import { COOKIE_NAME, LEGACY_SESSION_DURATION_MS, OAUTH_INIT_COOKIE_NAME } from "../../shared/const.js";
 import type { Express, Request, Response } from "express";
 import { parse as parseCookieHeader } from "cookie";
 import { getUserByOpenId, upsertUser } from "../db";
@@ -135,11 +135,11 @@ export function registerOAuthRoutes(app: Express) {
       await syncUser(userInfo);
       const sessionToken = await sdk.createSessionToken(userInfo.openId!, {
         name: userInfo.name || "",
-        expiresInMs: ONE_YEAR_MS,
+        expiresInMs: LEGACY_SESSION_DURATION_MS,
       });
 
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: LEGACY_SESSION_DURATION_MS });
 
       // Redirect to the frontend URL (Expo web on port 8081)
       // The session cookie is host-only on the 3000-xxx API host; the 8081-xxx
@@ -184,11 +184,11 @@ export function registerOAuthRoutes(app: Express) {
 
       const sessionToken = await sdk.createSessionToken(userInfo.openId!, {
         name: userInfo.name || "",
-        expiresInMs: ONE_YEAR_MS,
+        expiresInMs: LEGACY_SESSION_DURATION_MS,
       });
 
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: LEGACY_SESSION_DURATION_MS });
 
       res.json({
         app_session_id: sessionToken,
@@ -235,7 +235,7 @@ export function registerOAuthRoutes(app: Express) {
 
       // Set cookie for this domain (3000-xxx)
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: LEGACY_SESSION_DURATION_MS });
 
       res.json({ success: true, user: buildUserResponse(user) });
     } catch (error) {
