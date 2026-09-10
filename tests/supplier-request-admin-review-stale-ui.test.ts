@@ -34,6 +34,23 @@ describe("supplier request admin review stale-card fix (frontend wiring)", () =>
     expect(normalized).toContain("outcome.kind === \"processed\") { await invalidateRequests(); await invalidateCatalogQueries(); setNotice(outcome.message); }");
   });
 
+  it("treats an unchanged outcome after P0001 as already processed (no stale red banner)", () => {
+    const normalized = screen.replace(/\s+/g, " ");
+    expect(normalized).toContain("outcome.kind === \"unchanged\") { await invalidateRequests(); await invalidateCatalogQueries(); setNotice(PROCESSED_STATUS_MESSAGE); }");
+    expect(screen).toContain("PROCESSED_STATUS_MESSAGE");
+  });
+
+  it("clears stale error/notice once the request list delivers fresh data", () => {
+    const normalized = screen.replace(/\s+/g, " ");
+    expect(normalized).toContain("requestDataRef.current = (requestsQuery.data ?? []) as SupplierRequest[];");
+    expect(normalized).toContain("if (requestsQuery.data && requestsQuery.data !== requestDataRef.current) { setError(null); setNotice(null); setRetryAvailable(false); }");
+  });
+
+  it("does not show approve/reject actions for a request that is no longer pending", () => {
+    expect(screen).toContain("showActions && shouldShowAdminReviewActions(request.status) ? <View style={styles.reviewActions}>");
+    expect(screen).toContain("computeAdminReviewDisplay(allRequests, focusedId)");
+  });
+
   it("performs no optimistic update after an approval", () => {
     expect(screen).not.toMatch(/setData\(/);
     expect(screen).not.toMatch(/cancelQueries\(/);

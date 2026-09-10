@@ -3,7 +3,7 @@ import { AppIcon } from "@/components/ui/app-icon";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
-import { computeAdminReviewDisplay, filterPendingSupplierRequests, resolveAdminReviewFailure, shouldShowAdminReviewActions, supplierRequestStatusLabel } from "../lib/supplier-request-review-model";
+import { PROCESSED_STATUS_MESSAGE, computeAdminReviewDisplay, filterPendingSupplierRequests, resolveAdminReviewFailure, shouldShowAdminReviewActions, supplierRequestStatusLabel } from "../lib/supplier-request-review-model";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -97,6 +97,15 @@ function AdminReviewView({ colors, requestsQuery, onBack, requestId, scrollRef }
   useEffect(() => { setFocusedId(requestId); }, [requestId]);
   const allRequests = (requestsQuery.data ?? []) as SupplierRequest[];
   const displayRequests = computeAdminReviewDisplay(allRequests, focusedId);
+  const requestDataRef = useRef<readonly SupplierRequest[]>(allRequests);
+  useEffect(() => {
+    if (requestsQuery.data && requestsQuery.data !== requestDataRef.current) {
+      setError(null);
+      setNotice(null);
+      setRetryAvailable(false);
+    }
+    requestDataRef.current = (requestsQuery.data ?? []) as SupplierRequest[];
+  }, [requestsQuery.data]);
   const decide = (requestId: string, action: "approve" | "reject") => {
     setError(null);
     setNotice(null);
@@ -143,11 +152,13 @@ function AdminReviewView({ colors, requestsQuery, onBack, requestId, scrollRef }
         await invalidateRequests();
         await invalidateCatalogQueries();
         setNotice(outcome.message);
-      } else if (outcome.kind === "refetchFailed") {
-        setError(outcome.message);
-        setRetryAvailable(true);
+      } else if (outcome.kind === "unchanged") {
+        await invalidateRequests();
+        await invalidateCatalogQueries();
+        setNotice(PROCESSED_STATUS_MESSAGE);
       } else {
         setError(outcome.message);
+        setRetryAvailable(true);
       }
     }
   };
