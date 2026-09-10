@@ -1,13 +1,5 @@
 import type { CookieOptions, Request } from "express";
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
-
-function isIpAddress(host: string) {
-  // Basic IPv4 check and IPv6 presence detection.
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
-  return host.includes(":");
-}
-
 function isSecureRequest(req: Request) {
   if (req.protocol === "https") return true;
 
@@ -20,38 +12,15 @@ function isSecureRequest(req: Request) {
 }
 
 /**
- * Extract parent domain for cookie sharing across subdomains.
- * e.g., "3000-xxx.manuspre.computer" -> ".manuspre.computer"
- * This allows cookies set by 3000-xxx to be read by 8081-xxx
+ * Session cookie options (F4). Cookies are host-only: no `Domain` attribute,
+ * so the cookie is scoped to the exact host that issued it (e.g. the API at
+ * "3000-xxx.manuspre.computer"). Sibling subdomains never receive it.
  */
-function getParentDomain(hostname: string): string | undefined {
-  // Don't set domain for localhost or IP addresses
-  if (LOCAL_HOSTS.has(hostname) || isIpAddress(hostname)) {
-    return undefined;
-  }
-
-  // Split hostname into parts
-  const parts = hostname.split(".");
-
-  // Need at least 3 parts for a subdomain (e.g., "3000-xxx.manuspre.computer")
-  // For "manuspre.computer", we can't set a parent domain
-  if (parts.length < 3) {
-    return undefined;
-  }
-
-  // Return parent domain with leading dot (e.g., ".manuspre.computer")
-  // This allows cookie to be shared across all subdomains
-  return "." + parts.slice(-2).join(".");
-}
-
 export function getSessionCookieOptions(
   req: Request,
 ): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
-  const hostname = req.hostname;
-  const domain = getParentDomain(hostname);
-
   return {
-    domain,
+    domain: undefined,
     httpOnly: true,
     path: "/",
     sameSite: "none",
@@ -61,17 +30,14 @@ export function getSessionCookieOptions(
 
 /**
  * Options for the short-lived oauth_init cookie used to bind an OAuth state
- * to the originating browser. Same parent-domain logic as the session cookie
- * (F4 cookie domain mechanics unchanged) but SameSite=Lax and HttpOnly.
+ * to the originating browser. Also host-only (F4): no `Domain` attribute,
+ * SameSite=Lax and HttpOnly. TTL is applied by the caller (5-min OAuth state TTL).
  */
 export function getOauthInitCookieOptions(
   req: Request,
 ): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
-  const hostname = req.hostname;
-  const domain = getParentDomain(hostname);
-
   return {
-    domain,
+    domain: undefined,
     httpOnly: true,
     path: "/",
     sameSite: "lax",
