@@ -275,4 +275,92 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier one-stage Admin review E2E", () => {
     const { data: notForwarded } = await admin.from("consignment_requests").select("status").eq("id", requestId).single();
     expect(notForwarded?.status).toBe("pending");
   });
+
+  describe("SEC-01 RLS: direct UPDATE authorization on consignment_requests", () => {
+    it("denies Distributor direct UPDATE pending -> approved", async () => {
+      const requestId = await submitNewItem(fixture[2], "SEC01 DIST APR", "SEC01-DAP-001");
+      const { client: distributorClient } = await callerFor(fixture[0]);
+
+      const updated = await distributorClient
+        .from("consignment_requests")
+        .update({ status: "approved" })
+        .eq("id", requestId)
+        .select("id");
+      expect(updated.error).toBeNull();
+      expect(updated.data ?? []).toHaveLength(0);
+
+      const { data: row } = await admin.from("consignment_requests").select("status").eq("id", requestId).single();
+      expect(row?.status).toBe("pending");
+    });
+
+    it("denies Distributor direct UPDATE pending -> rejected", async () => {
+      const requestId = await submitNewItem(fixture[2], "SEC01 DIST REJ", "SEC01-DRE-001");
+      const { client: distributorClient } = await callerFor(fixture[0]);
+
+      const updated = await distributorClient
+        .from("consignment_requests")
+        .update({ status: "rejected" })
+        .eq("id", requestId)
+        .select("id");
+      expect(updated.error).toBeNull();
+      expect(updated.data ?? []).toHaveLength(0);
+
+      const { data: row } = await admin.from("consignment_requests").select("status").eq("id", requestId).single();
+      expect(row?.status).toBe("pending");
+    });
+
+    it("denies Mitra direct UPDATE after submission", async () => {
+      const requestId = await submitNewItem(fixture[2], "SEC01 MITRA UPD", "SEC01-MUP-001");
+      const { client: mitraClient } = await callerFor(fixture[2]);
+
+      const updated = await mitraClient
+        .from("consignment_requests")
+        .update({ reason: "must be immutable via direct UPDATE" })
+        .eq("id", requestId)
+        .select("id");
+      expect(updated.error).toBeNull();
+      expect(updated.data ?? []).toHaveLength(0);
+
+      const { data: row } = await admin.from("consignment_requests").select("status").eq("id", requestId).single();
+      expect(row?.status).toBe("pending");
+    });
+
+    it("allows Admin direct UPDATE inside own tenant, never cross-tenant", async () => {
+      const ownTenantRequestId = await submitNewItem(fixture[2], "SEC01 ADM OK", "SEC01-AOK-001");
+      const tenantBRequestId = await submitNewItem(fixture[4], "SEC01 ADM X", "SEC01-AX-001");
+      const { client: adminClient } = await callerFor(fixture[1]);
+
+      const ownUpdated = await adminClient
+        .from("consignment_requests")
+        .update({ review_note: "rls probe" })
+        .eq("id", ownTenantRequestId)
+        .select("id");
+      expect(ownUpdated.error).toBeNull();
+      expect(ownUpdated.data ?? []).toHaveLength(1);
+
+      const crossUpdated = await adminClient
+        .from("consignment_requests")
+        .update({ status: "approved" })
+        .eq("id", tenantBRequestId)
+        .select("id");
+      expect(crossUpdated.error).toBeNull();
+      expect(crossUpdated.data ?? []).toHaveLength(0);
+
+      const { data: crossRow } = await admin.from("consignment_requests").select("status").eq("id", tenantBRequestId).single();
+      expect(crossRow?.status).toBe("pending");
+    });
+
+    it("preserves Distributor SELECT within its tenant boundary", async () => {
+      const requestId = await submitNewItem(fixture[2], "SEC01 DIST SEL", "SEC01-DSL-001");
+      const { client: distributorClient } = await callerFor(fixture[0]);
+
+      const { data: rows, error } = await distributorClient
+        .from("consignment_requests")
+        .select("id, status")
+        .eq("id", requestId);
+      expect(error).toBeNull();
+      expect(rows ?? []).toHaveLength(1);
+      expect(rows?.[0]?.status).toBe("pending");
+    });
+  });
 });
