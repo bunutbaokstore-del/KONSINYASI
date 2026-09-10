@@ -21,7 +21,7 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
   if (Platform.OS !== "web") {
     const sessionToken = await Auth.getSessionToken();
     console.log("[API] apiCall:", {
-      endpoint,
+      endpoint: endpoint.split("?")[0],
       hasToken: !!sessionToken,
       method: options.method || "GET",
     });
@@ -30,7 +30,11 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
       console.log("[API] Authorization header added");
     }
   } else {
-    console.log("[API] apiCall:", { endpoint, platform: "web", method: options.method || "GET" });
+    console.log("[API] apiCall:", {
+      endpoint: endpoint.split("?")[0],
+      platform: "web",
+      method: options.method || "GET",
+    });
   }
 
   const baseUrl = getApiBaseUrl();
@@ -38,7 +42,7 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
   const cleanBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const url = baseUrl ? `${cleanBaseUrl}${cleanEndpoint}` : endpoint;
-  console.log("[API] Full URL:", url);
+  console.log("[API] Full URL:", url.split("?")[0]);
 
   try {
     console.log("[API] Making request...");
@@ -50,12 +54,13 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
 
     console.log("[API] Response status:", response.status, response.statusText);
     const responseHeaders = Object.fromEntries(response.headers.entries());
-    console.log("[API] Response headers:", responseHeaders);
+    const { "set-cookie": _ignoredSetCookie, ...safeHeaders } = responseHeaders;
+    console.log("[API] Response headers:", safeHeaders);
 
     // Check if Set-Cookie header is present (cookies are automatically handled in React Native)
     const setCookie = response.headers.get("Set-Cookie");
     if (setCookie) {
-      console.log("[API] Set-Cookie header received:", setCookie);
+      console.log("[API] Set-Cookie header received");
     }
 
     if (!response.ok) {
@@ -89,8 +94,13 @@ export async function exchangeOAuthCode(
   console.log("[API] exchangeOAuthCode called");
   // Use GET with query params
   const params = new URLSearchParams({ code, state });
+  if (Platform.OS !== "web") {
+    const { getDeviceInstanceId } = await import("./deviceNonce");
+    const instanceId = await getDeviceInstanceId();
+    if (instanceId) params.set("instanceId", instanceId);
+  }
   const endpoint = `/api/oauth/mobile?${params.toString()}`;
-  console.log("[API] Calling OAuth mobile endpoint:", endpoint);
+  console.log("[API] Calling OAuth mobile endpoint: /api/oauth/mobile");
   const result = await apiCall<{ app_session_id: string; user: any }>(endpoint);
 
   // Convert app_session_id to sessionToken for compatibility
@@ -98,7 +108,6 @@ export async function exchangeOAuthCode(
   console.log("[API] OAuth exchange result:", {
     hasSessionToken: !!sessionToken,
     hasUser: !!result.user,
-    sessionToken: sessionToken ? `${sessionToken.substring(0, 50)}...` : null,
   });
 
   return {

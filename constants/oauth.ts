@@ -52,17 +52,6 @@ export function getApiBaseUrl(): string {
 export const SESSION_TOKEN_KEY = "app_session_token";
 export const USER_INFO_KEY = "manus-runtime-user-info";
 
-const encodeState = (value: string) => {
-  if (typeof globalThis.btoa === "function") {
-    return globalThis.btoa(value);
-  }
-  const BufferImpl = (globalThis as Record<string, any>).Buffer;
-  if (BufferImpl) {
-    return BufferImpl.from(value, "utf-8").toString("base64");
-  }
-  return value;
-};
-
 /**
  * Get the redirect URI for OAuth callback.
  * - Web: uses API server callback endpoint
@@ -78,9 +67,35 @@ export const getRedirectUri = () => {
   }
 };
 
-export const getLoginUrl = () => {
+async function requestOAuthState(redirectUri: string): Promise<string> {
+  const baseUrl = getApiBaseUrl();
+  const payload: { redirectUri: string; instanceId?: string } = { redirectUri };
+  if (ReactNative.Platform.OS !== "web") {
+    const { getDeviceInstanceId } = await import("../lib/_core/deviceNonce");
+    payload.instanceId = await getDeviceInstanceId();
+  }
+  const response = await fetch(`${baseUrl}/api/oauth/init`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to obtain OAuth state (HTTP ${response.status})`);
+  }
+
+  const data = (await response.json()) as { state?: string };
+  if (!data.state) {
+    throw new Error("OAuth init response is missing state");
+  }
+
+  return data.state;
+}
+
+export async function getLoginUrl() {
   const redirectUri = getRedirectUri();
-  const state = encodeState(redirectUri);
+  const state = await requestOAuthState(redirectUri);
 
   const url = new URL(`${OAUTH_PORTAL_URL}/app-auth`);
   url.searchParams.set("appId", APP_ID);
@@ -89,7 +104,7 @@ export const getLoginUrl = () => {
   url.searchParams.set("type", "signIn");
 
   return url.toString();
-};
+}
 
 /**
  * Start OAuth login flow.
@@ -102,7 +117,13 @@ export const getLoginUrl = () => {
  * @returns Always null, the callback is handled via deep link.
  */
 export async function startOAuthLogin(): Promise<string | null> {
-  const loginUrl = getLoginUrl();
+  let loginUrl: string;
+  try {
+    loginUrl = await getLoginUrl();
+  } catch (error) {
+    console.error("[OAuth] Failed to start login:", error);
+    return null;
+  }
 
   if (ReactNative.Platform.OS === "web") {
     // On web, just redirect

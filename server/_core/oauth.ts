@@ -1,12 +1,29 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const.js";
+import { COOKIE_NAME, OAUTH_INIT_COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const.js";
 import type { Express, Request, Response } from "express";
+import { parse as parseCookieHeader } from "cookie";
 import { getUserByOpenId, upsertUser } from "../db";
-import { getSessionCookieOptions } from "./cookies";
+import { getOauthInitCookieOptions, getSessionCookieOptions } from "./cookies";
+import {
+  OAUTH_STATE_TTL_MS,
+  oauthStateStore,
+  randomBindingId,
+} from "./oauthState";
 import { sdk } from "./sdk";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
   return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * Read the oauth_init binding cookie from the request. This cookie is set by
+ * /api/oauth/init on the originating browser and must match the state record.
+ */
+function getOauthInitBinding(req: Request): string | undefined {
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return undefined;
+  const parsed = parseCookieHeader(cookieHeader);
+  return parsed[OAUTH_INIT_COOKIE_NAME];
 }
 
 async function syncUser(userInfo: {
@@ -62,6 +79,34 @@ function buildUserResponse(
 }
 
 export function registerOAuthRoutes(app: Express) {
+  app.post("/api/oauth/init", (req: Request, res: Response) => {
+    const redirectUri =
+      typeof req.body?.redirectUri === "string" ? req.body.redirectUri.trim() : "";
+
+    if (!redirectUri || !/^[a-z][a-z0-9+.-]*:/i.test(redirectUri)) {
+      res.status(400).json({ error: "redirectUri with a valid scheme is required" });
+      return;
+    }
+
+    // Native clients bind the state to their device via instanceId = SHA256(deviceNonce).
+    // Web browsers bind the state to the initiating browser via the oauth_init cookie.
+    const instanceId =
+      typeof req.body?.instanceId === "string" ? req.body.instanceId.trim() : "";
+    const binding = instanceId || randomBindingId();
+
+    const issued = oauthStateStore.issue(redirectUri, binding);
+
+    if (!instanceId) {
+      const cookieOptions = getOauthInitCookieOptions(req);
+      res.cookie(OAUTH_INIT_COOKIE_NAME, binding, {
+        ...cookieOptions,
+        maxAge: OAUTH_STATE_TTL_MS,
+      });
+    }
+
+    res.json({ state: issued.state, expiresInMs: issued.expiresInMs });
+  });
+
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");
@@ -71,8 +116,21 @@ export function registerOAuthRoutes(app: Express) {
       return;
     }
 
+    // Binding (the oauth_init cookie) must be verified BEFORE the state is consumed.
+    const binding = getOauthInitBinding(req);
+    if (!binding || !oauthStateStore.validateBinding(state, binding)) {
+      res.status(401).json({ error: "Invalid or expired OAuth state" });
+      return;
+    }
+
+    const redirectUri = oauthStateStore.consume(state);
+    if (!redirectUri) {
+      res.status(401).json({ error: "Invalid or expired OAuth state" });
+      return;
+    }
+
     try {
-      const tokenResponse = await sdk.exchangeCodeForToken(code, state);
+      const tokenResponse = await sdk.exchangeCodeForToken(code, redirectUri);
       const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
       await syncUser(userInfo);
       const sessionToken = await sdk.createSessionToken(userInfo.openId!, {
@@ -105,8 +163,21 @@ export function registerOAuthRoutes(app: Express) {
       return;
     }
 
+    // Binding (device instanceId) must be verified BEFORE the state is consumed.
+    const instanceId = getQueryParam(req, "instanceId");
+    if (!instanceId || !oauthStateStore.validateBinding(state, instanceId)) {
+      res.status(401).json({ error: "Invalid or expired OAuth state" });
+      return;
+    }
+
+    const redirectUri = oauthStateStore.consume(state);
+    if (!redirectUri) {
+      res.status(401).json({ error: "Invalid or expired OAuth state" });
+      return;
+    }
+
     try {
-      const tokenResponse = await sdk.exchangeCodeForToken(code, state);
+      const tokenResponse = await sdk.exchangeCodeForToken(code, redirectUri);
       const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
       const user = await syncUser(userInfo);
 

@@ -58,3 +58,23 @@ export function getSessionCookieOptions(
     secure: isSecureRequest(req),
   };
 }
+
+/**
+ * Options for the short-lived oauth_init cookie used to bind an OAuth state
+ * to the originating browser. Same parent-domain logic as the session cookie
+ * (F4 cookie domain mechanics unchanged) but SameSite=Lax and HttpOnly.
+ */
+export function getOauthInitCookieOptions(
+  req: Request,
+): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
+  const hostname = req.hostname;
+  const domain = getParentDomain(hostname);
+
+  return {
+    domain,
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax",
+    secure: isSecureRequest(req),
+  };
+}
