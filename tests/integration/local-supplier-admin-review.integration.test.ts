@@ -231,7 +231,7 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier one-stage Admin review E2E", () => {
     expect(approvedNotifications?.[0]).toMatchObject({ recipient_user_id: fixture[2].id, request_id: requestId });
 
     const { caller: distributorCaller } = await callerFor(fixture[0]);
-    await expect(distributorCaller.supplier.review({ requestId, decision: "approved", reviewNote: "distributor must not decide" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(distributorCaller.supplier.adminReview({ requestId, action: "approve", reviewNote: "distributor must not decide" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("rejects a pending request without creating a product and notifies the Mitra", async () => {
@@ -256,7 +256,7 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier one-stage Admin review E2E", () => {
     expect(rejectedNotifications?.[0]).toMatchObject({ recipient_user_id: fixture[2].id, request_id: requestId });
 
     const { caller: distributorCaller } = await callerFor(fixture[0]);
-    await expect(distributorCaller.supplier.review({ requestId, decision: "approved", reviewNote: "too late" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(distributorCaller.supplier.adminReview({ requestId, action: "approve", reviewNote: "too late" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("denies Distributor, Mitra, and cross-tenant Admin review", async () => {

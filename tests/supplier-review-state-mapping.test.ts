@@ -4,13 +4,15 @@ import { resolve } from "node:path";
 
 const source = readFileSync(resolve(process.cwd(), "server/routers.ts"), "utf8");
 
-describe("supplier.review distributes no approval authority", () => {
-  it("keeps the review procedure accepting old callers but always refuses them", () => {
-    const reviewBlock = source.split("review: distributorProcedure")[1]?.split("adminReview: supabaseProtectedProcedure")[0];
-    expect(reviewBlock).toBeTruthy();
-    expect(reviewBlock).toContain('code: "FORBIDDEN"');
-    expect(reviewBlock).toContain("Keputusan pengajuan kini menjadi kewenangan Administrator.");
-    expect(reviewBlock).not.toContain("review_consignment_request");
+describe("supplier approval distributes no review authority", () => {
+  it("removed the legacy two-stage supplier.review procedure entirely", () => {
+    expect(source).not.toContain("review: distributorProcedure");
+    expect(source).not.toContain("Keputusan pengajuan kini menjadi kewenangan Administrator.");
+  });
+
+  it("keeps the Admin decision procedure as the only review entry point", () => {
+    expect(source).toContain("adminReview: supabaseProtectedProcedure");
+    expect(source).toContain('adminClient.rpc("admin_review_consignment_request"');
   });
 
   it("removed the two-stage RPC call and its state strings", () => {

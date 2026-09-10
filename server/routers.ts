@@ -785,11 +785,6 @@ export const appRouter = router({
         await notifyWorkspaceAdmins(distributorId, data.id, "Pengajuan perubahan stok", `${mitraName} mengajukan perubahan stok menjadi ${input.proposedStockQuantity}.`);
         return toSupplierRequest(data);
       }),
-    review: distributorProcedure
-      .input(z.object({ requestId: z.string().uuid(), decision: z.enum(["approved", "rejected"]), reviewNote: z.string().trim().max(500).optional() }))
-      .mutation(async () => {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Keputusan pengajuan kini menjadi kewenangan Administrator." });
-      }),
     adminReview: supabaseProtectedProcedure
       .input(z.object({ requestId: z.string().uuid(), action: z.enum(["approve", "reject", "forward"]), reviewNote: z.string().trim().max(500).optional() }))
       .mutation(async ({ ctx, input }) => {
@@ -800,6 +795,14 @@ export const appRouter = router({
         if (!adminId) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sesi Administrator tidak ditemukan." });
         const adminClient = getSupabaseAdminClient();
         const effectiveAction = input.action === "forward" ? "approve" : input.action;
+        const { data: dbRow } = await adminClient
+          .from("consignment_requests")
+          .select("id, status, distributor_id")
+          .eq("id", input.requestId)
+          .eq("distributor_id", distributorId)
+          .maybeSingle();
+        console.log("[adminReview:db-read]", JSON.stringify({ requestId: input.requestId, dbStatus: dbRow?.status ?? null, dbDistributorId: dbRow?.distributor_id ?? null }));
+        console.log("[adminReview:before-rpc]", JSON.stringify({ requestId: input.requestId, distributorId, adminId, action: effectiveAction }));
         const { error: rpcError } = await adminClient.rpc("admin_review_consignment_request", {
           p_request_id: input.requestId,
           p_distributor_id: distributorId,
@@ -807,6 +810,7 @@ export const appRouter = router({
           p_action: effectiveAction,
           p_note: input.reviewNote?.trim() || null,
         });
+        console.log("[adminReview:rpc-result]", JSON.stringify({ requestId: input.requestId, rpcErrorCode: rpcError?.code ?? null, rpcSucceeded: !rpcError }));
 
         if (rpcError) {
           if (rpcError.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: "Anda tidak berwenang memproses pengajuan ini." });

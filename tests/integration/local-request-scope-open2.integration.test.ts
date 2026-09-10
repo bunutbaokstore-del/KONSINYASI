@@ -556,18 +556,18 @@ describe.skipIf(!RUN_LOCAL)("OPEN-2 consignment request INSERT scope hardening",
 
     const { caller: distributorBCaller } = await callerFor(fixture[1]);
     await expect(
-      distributorBCaller.supplier.review({
+      distributorBCaller.supplier.adminReview({
         requestId,
-        decision: "rejected",
+        action: "reject",
         reviewNote: "OPEN2 cross tenant note",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     const { caller: distributorACaller } = await callerFor(fixture[0]);
     await expect(
-      distributorACaller.supplier.review({
+      distributorACaller.supplier.adminReview({
         requestId,
-        decision: "rejected",
+        action: "reject",
         reviewNote: "OPEN2 legitimate review note",
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });

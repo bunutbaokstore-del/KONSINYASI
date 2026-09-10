@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.review_consignment_request(uuid,uuid,uuid,text,text);

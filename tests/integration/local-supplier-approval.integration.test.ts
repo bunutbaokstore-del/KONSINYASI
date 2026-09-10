@@ -218,11 +218,10 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier Request New Item approval E2E", () =
     expect(adminReadError).toBeNull();
     expect(adminRead?.status).toBe("pending");
 
-    const { caller: adminCaller } = await callerFor(fixture[2]);
-    await expect(adminCaller.supplier.review({
+    await expect(mitraCaller.supplier.adminReview({
       requestId: requestAId,
-      decision: "approved",
-      reviewNote: "admin must not approve",
+      action: "approve",
+      reviewNote: "mitra must not decide",
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     const { data: submitNotifications, error: submitNotificationsError } = await admin
@@ -309,9 +308,9 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier Request New Item approval E2E", () =
     expect(notificationError).toBeNull();
     expect(notification?.notification_type).toBe("request_approved");
 
-    await expect(distributorCaller.supplier.review({
+    await expect(distributorCaller.supplier.adminReview({
       requestId: requestAId,
-      decision: "rejected",
+      action: "reject",
       reviewNote: "duplicate review must fail",
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
@@ -331,9 +330,9 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier Request New Item approval E2E", () =
     const beforeProducts = await admin.from("products").select("id").eq("distributor_id", fixture[0].id!);
     const beforeItems = await admin.from("consignment_items").select("id").eq("mitra_user_id", fixture[3].id!);
 
-    await expect(mitraCaller.supplier.review({
+    await expect(mitraCaller.supplier.adminReview({
       requestId: rejectedRequestId,
-      decision: "rejected",
+      action: "reject",
       reviewNote: "mitra must not review",
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
@@ -360,9 +359,9 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier Request New Item approval E2E", () =
     expect(rejectedNotifications?.[0]).toMatchObject({ notification_type: "request_rejected", recipient_user_id: fixture[3].id });
 
     const { caller: distributorCaller } = await callerFor(fixture[0]);
-    await expect(distributorCaller.supplier.review({
+    await expect(distributorCaller.supplier.adminReview({
       requestId: rejectedRequestId,
-      decision: "approved",
+      action: "approve",
       reviewNote: "distributor must not revive rejected request",
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
@@ -421,7 +420,7 @@ describe.skipIf(!RUN_LOCAL)("LOCAL Supplier Request New Item approval E2E", () =
     const { itemId, requestId } = await prepareStockChange(10, 15, "Increase stock for lifecycle test");
     await approveAsAdmin(requestId, "approved increase by Admin");
     const { caller: distributorCaller } = await callerFor(fixture[0]);
-    await expect(distributorCaller.supplier.review({ requestId, decision: "approved", reviewNote: "distributor must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(distributorCaller.supplier.adminReview({ requestId, action: "approve", reviewNote: "distributor must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     const { data: item } = await admin.from("consignment_items").select("stock_quantity").eq("id", itemId).single();
     expect(item?.stock_quantity).toBe(15);
@@ -463,7 +462,7 @@ expect(approvedNotifications?.[0]).toMatchObject({
     const { itemId, requestId } = await prepareStockChange(10, 4, "Decrease stock for lifecycle test");
     await approveAsAdmin(requestId, "approved decrease by Admin");
     const { caller: distributorCaller } = await callerFor(fixture[0]);
-    await expect(distributorCaller.supplier.review({ requestId, decision: "approved", reviewNote: "distributor must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(distributorCaller.supplier.adminReview({ requestId, action: "approve", reviewNote: "distributor must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     const { data: item } = await admin.from("consignment_items").select("stock_quantity").eq("id", itemId).single();
     expect(item?.stock_quantity).toBe(4);
     const { data: movements } = await admin
@@ -503,7 +502,7 @@ expect(approvedNotifications?.[0]).toMatchObject({
     const { itemId, requestId } = await prepareStockChange(10, 10, "Keep stock for lifecycle test");
     await approveAsAdmin(requestId, "approved unchanged by Admin");
     const { caller: distributorCaller } = await callerFor(fixture[0]);
-    await expect(distributorCaller.supplier.review({ requestId, decision: "approved", reviewNote: "distributor must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(distributorCaller.supplier.adminReview({ requestId, action: "approve", reviewNote: "distributor must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     const { data: item } = await admin.from("consignment_items").select("stock_quantity").eq("id", itemId).single();
     expect(item?.stock_quantity).toBe(10);
     const { data: movements } = await admin.from("stock_movements").select("movement_type, previous_stock, change_quantity, resulting_stock").eq("request_id", requestId);
@@ -650,11 +649,9 @@ it("allows only one concurrent Admin approval for the same stock_change request"
 
     const pending = await mitraSameWorkspace.supplier.submitStockChange({ itemId: sameWorkspaceItem!.id, proposedStockQuantity: 11, reason: "role boundary fixture" });
     stockChangeRequestIds.push(pending.id);
-    const { caller: adminCaller } = await callerFor(fixture[2]);
-    await expect(adminCaller.supplier.review({ requestId: pending.id, decision: "approved", reviewNote: "admin must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(mitraSameWorkspace.supplier.review({ requestId: pending.id, decision: "approved", reviewNote: "mitra must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(mitraSameWorkspace.supplier.adminReview({ requestId: pending.id, action: "approve", reviewNote: "mitra must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     const { caller: distributorB } = await callerFor(fixture[1]);
-    await expect(distributorB.supplier.review({ requestId: pending.id, decision: "approved", reviewNote: "wrong distributor must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(distributorB.supplier.adminReview({ requestId: pending.id, action: "approve", reviewNote: "wrong distributor must fail" })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     await expect(mitraA.supplier.submitStockChange({ itemId: sameWorkspaceItem!.id, proposedStockQuantity: -1, reason: "negative quantity" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(mitraA.supplier.submitStockChange({ itemId: sameWorkspaceItem!.id, proposedStockQuantity: 1.5 as number, reason: "decimal quantity" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
@@ -684,9 +681,9 @@ it("allows only one concurrent Admin approval for the same stock_change request"
     expect(crossTenantRead.error).toBeNull();
     expect(crossTenantRead.data).toEqual([]);
 
-    await expect(distributorACaller.supplier.review({
+    await expect(distributorACaller.supplier.adminReview({
       requestId: requestBId,
-      decision: "approved",
+      action: "approve",
       reviewNote: "cross tenant must fail",
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
@@ -767,9 +764,9 @@ it("allows only one concurrent Admin approval for the same stock_change request"
 
     const { caller: distributorCaller } = await callerFor(fixture[0]);
     await approveAsAdmin(ws001RequestId, "admin approved after direct UPDATE rejection");
-    await expect(distributorCaller.supplier.review({
+    await expect(distributorCaller.supplier.adminReview({
       requestId: ws001RequestId,
-      decision: "approved",
+      action: "approve",
       reviewNote: "distributor must fail after direct UPDATE rejection",
     })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
