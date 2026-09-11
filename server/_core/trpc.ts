@@ -1,5 +1,5 @@
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "../../shared/const";
-import { getUserRole, isActiveSysAdmin } from "../supabase-admin";
+import { getDistributorId, getUserRole, isActiveSysAdmin } from "../supabase-admin";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
@@ -138,3 +138,30 @@ export const distributorProcedure = supabaseProtectedProcedure.use(
     });
   }),
 );
+
+export const adminTenantMiddleware = supabaseProtectedProcedure.use(
+  t.middleware(async (opts) => {
+    const { ctx, next } = opts;
+
+    if (getUserRole(ctx.supabaseUser) !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+    }
+
+    const distributorId = getDistributorId(ctx.supabaseUser);
+    if (!distributorId) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Ruang kerja Distributor tidak ditemukan.",
+      });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        supabaseUser: ctx.supabaseUser,
+      },
+    });
+  }),
+);
+
+export const adminTenantProcedure = adminTenantMiddleware;

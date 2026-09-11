@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const routersSource = readFileSync(resolve(process.cwd(), "server/routers.ts"), "utf8");
 const procedureStart = routersSource.indexOf("mitraProductionStock: router({");
-const procedureEnd = routersSource.indexOf("productApproval: router({", procedureStart);
+const procedureEnd = routersSource.indexOf("mitraDashboard: router({", procedureStart);
 const procedureSource = routersSource.slice(procedureStart, procedureEnd);
 
 describe("Persistent Mitra Production Stock READ procedure", () => {

@@ -9,7 +9,7 @@ export default function AdminOperationalScreen() {
         { title: "Persetujuan", description: "Tinjau dan putuskan pengajuan Mitra UMKM.", icon: "send", route: "/supplier-requests" },
         { title: "Katalog Produk", description: "Atur barang dan stok Mitra UMKM.", icon: "inventory", route: "/admin/products" },
         { title: "Daftar Mitra UMKM", description: "Lihat daftar Mitra UMKM dalam ruang kerja tenant.", icon: "group", route: "/mitra-users" },
-        { title: "Wilayah", description: "Struktur wilayah operasional belum tersedia.", icon: "building" },
+        { title: "Wilayah", description: "Kelola wilayah, rute, outlet, dan penugasan Sales.", icon: "building", route: "/admin/wilayah" },
         { title: "Alokasi Muatan", description: "Alokasi muatan belum memiliki backend.", icon: "shippingbox" },
       ]}
     />

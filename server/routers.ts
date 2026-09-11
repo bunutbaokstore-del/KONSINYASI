@@ -2,7 +2,8 @@ import { COOKIE_NAME } from "../shared/const.js";
 import { isManagedRole, ROLE_LABELS, type AppRole } from "../shared/auth";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { distributorProcedure, publicProcedure, router, supabaseProtectedProcedure, sysAdminProcedure, userManagementProcedure } from "./_core/trpc";
+import type { TrpcContext } from "./_core/context";
+import { adminTenantProcedure as adminTenantProcedureBase, distributorProcedure, publicProcedure, router, supabaseProtectedProcedure, sysAdminProcedure, userManagementProcedure } from "./_core/trpc";
 import { getBearerToken, getDistributorId, getSupabaseAdminClient, getSupabasePublicClient, getSupabaseUserClient, getUserRole } from "./supabase-admin";
 import { TRPCError } from "@trpc/server";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
@@ -11,6 +12,7 @@ import { getStockStatus, summarizeStock } from "../shared/consignment";
 import { calculateHppSummary, type HppComponent } from "../shared/hpp";
 import type { BudgetPeriod } from "../shared/budgets";
 import { z } from "zod";
+import type { AssignmentHistoryEntry, OutletRecord, RuteDetail, SalesRecord, WilayahDetail, WilayahRecord } from "../shared/distribution";
 
 const roleSchema = z.enum(["distributor", "admin", "mitra_umkm", "supervisor", "sales_motoris", "hrd"]);
 const emailSchema = z.string().trim().toLowerCase().email().max(320);
@@ -19,6 +21,24 @@ const phoneSchema = z.string().trim().transform((value) => value.replace(/[\s()-
 const addressSchema = z.string().trim().min(10, "Alamat minimal 10 karakter.").max(500);
 const passwordSchema = z.string().min(8, "Password minimal 8 karakter").max(72);
 const ktpContentTypeSchema = z.enum(KTP_CONTENT_TYPES);
+
+type AdminTenantQueryBuilder<TSchema extends z.ZodType> = ReturnType<typeof adminTenantProcedureBase.input<TSchema>>;
+
+function adminTenantQuery<TSchema extends z.ZodType>(schema: TSchema): AdminTenantQueryBuilder<TSchema>["query"];
+function adminTenantQuery(): typeof adminTenantProcedureBase.query;
+function adminTenantQuery<TSchema extends z.ZodType>(schema?: TSchema) {
+  if (schema) return adminTenantProcedureBase.input(schema).query;
+  return adminTenantProcedureBase.query;
+}
+
+function adminTenantMutation<TSchema extends z.ZodType>(schema: TSchema): AdminTenantQueryBuilder<TSchema>["mutation"];
+function adminTenantMutation(): typeof adminTenantProcedureBase.mutation;
+function adminTenantMutation<TSchema extends z.ZodType>(schema?: TSchema) {
+  if (schema) return adminTenantProcedureBase.input(schema).mutation;
+  return adminTenantProcedureBase.mutation;
+}
+
+const adminTenantProcedure = { query: adminTenantQuery, mutation: adminTenantMutation };
 
 function callerRole(ctx: { supabaseUser: SupabaseUser | null }) {
   return getUserRole(ctx.supabaseUser);
@@ -311,6 +331,145 @@ function toManagedUser(user: { id: string; email?: string; user_metadata?: Recor
     createdAt: user.created_at,
     lastSignInAt: user.last_sign_in_at ?? null,
   } as const;
+}
+
+type DistributionUser = { id: string; nama: string; email: string | null; role: AppRole };
+
+async function listTenantUsers(distributorId: string): Promise<DistributionUser[]> {
+  const { data, error } = await getSupabaseAdminClient().auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) return [];
+  return data.users
+    .filter((user) => {
+      const role = getUserRole(user);
+      if (role !== "sales_motoris" && role !== "admin") return false;
+      const userDistributorId = typeof user.app_metadata?.distributor_id === "string" ? user.app_metadata.distributor_id : null;
+      return userDistributorId === distributorId;
+    })
+    .map((user) => {
+      const role = getUserRole(user);
+      const metadataName = user.user_metadata?.full_name ?? user.user_metadata?.name;
+      return {
+        id: user.id,
+        nama: typeof metadataName === "string" && metadataName.trim() ? metadataName.trim() : user.email?.split("@")[0] ?? "Pengguna",
+        email: user.email ?? null,
+        role: role ?? "sales_motoris",
+      };
+    });
+}
+
+function countByRute(rows: { rute_id: string }[]) {
+  const counts = new Map<string, number>();
+  for (const row of rows) counts.set(row.rute_id, (counts.get(row.rute_id) ?? 0) + 1);
+  return counts;
+}
+
+function toWilayahRecord(
+  wilayah: { id: string; kode: string; nama: string; keterangan?: string | null; is_active: boolean; created_at: string; updated_at: string },
+  ruteCounts: Map<string, number>,
+  outletCounts: Map<string, number>,
+  salesCounts: Map<string, number>,
+) {
+  return {
+    id: wilayah.id,
+    kode: wilayah.kode,
+    nama: wilayah.nama,
+    keterangan: wilayah.keterangan ?? null,
+    isActive: wilayah.is_active,
+    createdAt: wilayah.created_at,
+    updatedAt: wilayah.updated_at,
+    ruteCount: ruteCounts.get(wilayah.id) ?? 0,
+    outletCount: outletCounts.get(wilayah.id) ?? 0,
+    salesCount: salesCounts.get(wilayah.id) ?? 0,
+  } as const satisfies WilayahRecord;
+}
+
+function toRuteRecord(rute: { id: string; wilayah_id: string; kode: string; nama: string; keterangan?: string | null; is_active: boolean; created_at: string; updated_at: string }) {
+  return {
+    id: rute.id,
+    wilayahId: rute.wilayah_id,
+    kode: rute.kode,
+    nama: rute.nama,
+    keterangan: rute.keterangan ?? null,
+    isActive: rute.is_active,
+    createdAt: rute.created_at,
+    updatedAt: rute.updated_at,
+  } as const;
+}
+
+function toOutletRecord(
+  outlet: { id: string; kode: string; nama: string; alamat: string; is_active: boolean; created_at: string; updated_at: string },
+  activeRuteId: string | null,
+  activeRuteNama: string | null,
+) {
+  return {
+    id: outlet.id,
+    kode: outlet.kode,
+    nama: outlet.nama,
+    alamat: outlet.alamat,
+    alamatSingkat: outlet.alamat.length > 80 ? `${outlet.alamat.slice(0, 80).trimEnd()}...` : outlet.alamat,
+    isActive: outlet.is_active,
+    createdAt: outlet.created_at,
+    updatedAt: outlet.updated_at,
+    activeRuteId,
+    activeRuteNama,
+  } as const satisfies OutletRecord;
+}
+
+function toSalesRecord(user: DistributionUser, ruteNamaById: Map<string, string>, activeRuteBySales: Map<string, string>): SalesRecord {
+  const ruteId = activeRuteBySales.get(user.id) ?? null;
+  return {
+    id: user.id,
+    nama: user.nama,
+    email: user.email,
+    activeRuteId: ruteId,
+    activeRuteNama: ruteId ? ruteNamaById.get(ruteId) ?? null : null,
+  } as const satisfies SalesRecord;
+}
+
+function rpcFailure(error: { code?: string; message?: string; hint?: string } | null): never {
+  const code = error?.code;
+  const message = error?.message?.replace(/^[A-Z0-9]{5}:\s*/, "") ?? error?.hint ?? "";
+  if (code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: "Aksi ini hanya dapat dilakukan Admin pada ruang kerja yang sama." });
+  if (code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: message || "Data tidak ditemukan." });
+  if (code === "23505") throw new TRPCError({ code: "CONFLICT", message: "Data tersebut sudah digunakan." });
+  if (code === "22000") throw new TRPCError({ code: "BAD_REQUEST", message: message || "Operasi gagal." });
+  throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: message || "Operasi gagal." });
+}
+
+async function assignOutletToRute(distributorId: string, assignedBy: string, outletId: string, ruteId: string) {
+  const { data, error } = await getSupabaseAdminClient().rpc("assign_outlet_to_rute", {
+    p_outlet_id: outletId,
+    p_rute_id: ruteId,
+    p_distributor_id: distributorId,
+    p_assigned_by: assignedBy,
+  });
+  if (error) rpcFailure(error);
+  const row = Array.isArray(data) ? data?.[0] : data;
+  if (!row) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Penugasan tidak berhasil." });
+  return {
+    assignmentId: row.assignment_id as string,
+    action: row.action as "assign" | "reassign",
+    previousRuteId: row.previous_rute_id as string | null,
+    assignedAt: row.assigned_at as string,
+  };
+}
+
+async function assignSalesToRute(distributorId: string, assignedBy: string, salesUserId: string, ruteId: string) {
+  const { data, error } = await getSupabaseAdminClient().rpc("assign_sales_to_rute", {
+    p_sales_user: salesUserId,
+    p_rute_id: ruteId,
+    p_distributor_id: distributorId,
+    p_assigned_by: assignedBy,
+  });
+  if (error) rpcFailure(error);
+  const row = Array.isArray(data) ? data?.[0] : data;
+  if (!row) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Penugasan tidak berhasil." });
+  return {
+    assignmentId: row.assignment_id as string,
+    action: row.action as "assign" | "reassign",
+    previousRuteId: row.previous_rute_id as string | null,
+    assignedAt: row.assigned_at as string,
+  };
 }
 
 export const appRouter = router({
@@ -1249,6 +1408,489 @@ export const appRouter = router({
           .single();
         if (error || !data) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Anggaran produksi belum dapat disimpan." });
         return toBudget(data);
+      }),
+  }),
+  distribution: router({
+    listWilayah: adminTenantProcedure.query()(async ({ ctx }) => {
+      const distributorId = getDistributorId(ctx.supabaseUser);
+      if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+      const adminClient = getSupabaseAdminClient();
+      const [wilayahResult, ruteResult] = await Promise.all([
+        adminClient.from("wilayah").select("id, kode, nama, keterangan, is_active, created_at, updated_at").eq("distributor_id", distributorId).order("created_at", { ascending: true }),
+        adminClient.from("rute").select("id, wilayah_id").eq("distributor_id", distributorId),
+      ]);
+      if (wilayahResult.error || ruteResult.error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Daftar wilayah belum dapat dimuat." });
+
+      const ruteToWilayah = new Map<string, string>();
+      for (const rute of ruteResult.data ?? []) ruteToWilayah.set(rute.id, rute.wilayah_id);
+
+      const ruteCounts = new Map<string, number>();
+      for (const rute of ruteResult.data ?? []) ruteCounts.set(rute.wilayah_id, (ruteCounts.get(rute.wilayah_id) ?? 0) + 1);
+
+      let outletCounts = new Map<string, number>();
+      let salesCounts = new Map<string, number>();
+      const ruteIds = [...ruteToWilayah.keys()];
+      if (ruteIds.length > 0) {
+        const [outletResult, salesResult] = await Promise.all([
+          adminClient.from("rute_outlet_assignments").select("rute_id").eq("distributor_id", distributorId).in("rute_id", ruteIds).is("ended_at", null),
+          adminClient.from("rute_sales_assignments").select("rute_id").eq("distributor_id", distributorId).in("rute_id", ruteIds).is("ended_at", null),
+        ]);
+        outletCounts = countByRute(outletResult.data ?? []);
+        salesCounts = countByRute(salesResult.data ?? []);
+        outletCounts = new Map([...outletCounts].map(([ruteId, count]) => [ruteToWilayah.get(ruteId) ?? ruteId, count]));
+        salesCounts = new Map([...salesCounts].map(([ruteId, count]) => [ruteToWilayah.get(ruteId) ?? ruteId, count]));
+      }
+
+      return (wilayahResult.data ?? []).map((wilayah) => toWilayahRecord(wilayah, ruteCounts, outletCounts, salesCounts));
+    }),
+    getWilayah: adminTenantProcedure.query(
+      z.object({ wilayahId: z.string().uuid() }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        const adminClient = getSupabaseAdminClient();
+        const { data: wilayah, error: wilayahError } = await adminClient.from("wilayah").select("id, kode, nama, keterangan, is_active, created_at, updated_at").eq("id", input.wilayahId).eq("distributor_id", distributorId).maybeSingle();
+        if (wilayahError || !wilayah) throw new TRPCError({ code: "NOT_FOUND", message: "Wilayah tidak ditemukan." });
+
+        const { data: rutes, error: ruteError } = await adminClient.from("rute").select("id, wilayah_id, kode, nama, keterangan, is_active, created_at, updated_at").eq("distributor_id", distributorId).eq("wilayah_id", input.wilayahId).order("created_at", { ascending: true });
+        if (ruteError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Daftar rute belum dapat dimuat." });
+
+        const ruteIds = (rutes ?? []).map((rute) => rute.id);
+        const ruteNamaById = new Map((rutes ?? []).map((rute) => [rute.id, rute.nama]));
+        const assignments = ruteIds.length > 0
+          ? await Promise.all([
+              adminClient.from("rute_outlet_assignments").select("rute_id, outlet_id, assigned_at").eq("distributor_id", distributorId).in("rute_id", ruteIds).is("ended_at", null),
+              adminClient.from("rute_sales_assignments").select("rute_id, sales_id, assigned_at").eq("distributor_id", distributorId).in("rute_id", ruteIds).is("ended_at", null),
+            ])
+          : null;
+        const outletAssigns = assignments?.[0]?.data ?? [];
+        const salesAssigns = assignments?.[1]?.data ?? [];
+
+        const outletByRute = new Map<string, OutletRecord[]>();
+        const outletIds = [...new Set(outletAssigns.map((a) => a.outlet_id))];
+        if (outletIds.length > 0) {
+          const { data: outletRows } = await adminClient.from("outlet").select("id, kode, nama, alamat, is_active, created_at, updated_at").eq("distributor_id", distributorId).in("id", outletIds);
+          const outletById = new Map((outletRows ?? []).map((outlet) => [outlet.id, outlet]));
+          for (const a of outletAssigns) {
+            const outlet = outletById.get(a.outlet_id);
+            if (!outlet) continue;
+            const list = outletByRute.get(a.rute_id) ?? [];
+            list.push(toOutletRecord(outlet, a.rute_id, ruteNamaById.get(a.rute_id) ?? null));
+            outletByRute.set(a.rute_id, list);
+          }
+        }
+
+        const salesByRute = new Map<string, SalesRecord[]>();
+        const salesIds = [...new Set(salesAssigns.map((a) => a.sales_id))];
+        if (salesIds.length > 0) {
+          const tenantUsers = await listTenantUsers(distributorId);
+          const salesById = new Map(tenantUsers.filter((user) => user.role === "sales_motoris").map((user) => [user.id, user]));
+          const activeRuteBySales = new Map(salesAssigns.map((a) => [a.sales_id, a.rute_id]));
+          for (const salesUserId of salesIds) {
+            const user = salesById.get(salesUserId);
+            if (!user) continue;
+            const list = salesByRute.get(activeRuteBySales.get(salesUserId) ?? "") ?? [];
+            list.push(toSalesRecord(user, ruteNamaById, new Map([[salesUserId, activeRuteBySales.get(salesUserId) ?? ""]])));
+            salesByRute.set(activeRuteBySales.get(salesUserId) ?? "", list);
+          }
+        }
+
+        return {
+          wilayah: {
+            id: wilayah.id,
+            kode: wilayah.kode,
+            nama: wilayah.nama,
+            keterangan: wilayah.keterangan ?? null,
+            isActive: wilayah.is_active,
+            createdAt: wilayah.created_at,
+            updatedAt: wilayah.updated_at,
+          },
+          rutes: (rutes ?? []).map((rute) => {
+            const outlets = outletByRute.get(rute.id) ?? [];
+            const sales = salesByRute.get(rute.id) ?? [];
+            return {
+              ...toRuteRecord(rute),
+              outlets,
+              sales,
+              outletCount: outlets.length,
+              salesCount: sales.length,
+            };
+          }),
+        } satisfies WilayahDetail;
+      }),
+    createWilayah: adminTenantProcedure.mutation(
+      z.object({
+        kode: z.string().trim().min(1, "Kode minimal 1 karakter.").max(40, "Kode maksimal 40 karakter."),
+        nama: z.string().trim().min(2, "Nama minimal 2 karakter.").max(120, "Nama maksimal 120 karakter."),
+        keterangan: z.string().trim().max(500, "Keterangan maksimal 500 karakter.").nullable().optional(),
+      }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        const { data, error } = await getSupabaseAdminClient().from("wilayah").insert({
+          distributor_id: distributorId,
+          kode: input.kode,
+          nama: input.nama,
+          keterangan: input.keterangan ?? null,
+          created_by: ctx.supabaseUser!.id,
+        }).select("id, kode, nama, keterangan, is_active, created_at, updated_at").maybeSingle();
+        if (error?.code === "23505") throw new TRPCError({ code: "CONFLICT", message: "Kode Wilayah sudah digunakan." });
+        if (error || !data) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Wilayah belum dapat dibuat." });
+        return toWilayahRecord(data, new Map(), new Map(), new Map());
+      }),
+    updateWilayah: adminTenantProcedure.mutation(
+      z.object({
+        wilayahId: z.string().uuid(),
+        kode: z.string().trim().min(1, "Kode minimal 1 karakter.").max(40, "Kode maksimal 40 karakter.").optional(),
+        nama: z.string().trim().min(2, "Nama minimal 2 karakter.").max(120, "Nama maksimal 120 karakter.").optional(),
+        keterangan: z.string().trim().max(500, "Keterangan maksimal 500 karakter.").nullable().optional(),
+      }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        if (input.kode === undefined && input.nama === undefined && input.keterangan === undefined) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Tidak ada data yang diubah." });
+        }
+        const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (input.kode !== undefined) patch.kode = input.kode;
+        if (input.nama !== undefined) patch.nama = input.nama;
+        if (input.keterangan !== undefined) patch.keterangan = input.keterangan;
+        const { data, error } = await getSupabaseAdminClient().from("wilayah").update(patch).eq("id", input.wilayahId).eq("distributor_id", distributorId).select("id, kode, nama, keterangan, is_active, created_at, updated_at").maybeSingle();
+        if (error?.code === "23505") throw new TRPCError({ code: "CONFLICT", message: "Kode Wilayah sudah digunakan." });
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Wilayah belum dapat diperbarui." });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Wilayah tidak ditemukan." });
+        return toWilayahRecord(data, new Map(), new Map(), new Map());
+      }),
+    setWilayahActive: adminTenantProcedure.mutation(
+      z.object({ wilayahId: z.string().uuid(), isActive: z.boolean() }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        const { data, error } = await getSupabaseAdminClient().from("wilayah").update({ is_active: input.isActive, updated_at: new Date().toISOString() }).eq("id", input.wilayahId).eq("distributor_id", distributorId).select("id, kode, nama, keterangan, is_active, created_at, updated_at").maybeSingle();
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Status Wilayah belum dapat diperbarui." });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Wilayah tidak ditemukan." });
+        return toWilayahRecord(data, new Map(), new Map(), new Map());
+      }),
+    listRute: adminTenantProcedure.query(
+      z.object({ wilayahId: z.string().uuid().optional() }).optional(),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        const adminClient = getSupabaseAdminClient();
+        let query = adminClient.from("rute").select("id, wilayah_id, kode, nama, keterangan, is_active, created_at, updated_at").eq("distributor_id", distributorId).order("created_at", { ascending: true });
+        if (input?.wilayahId) query = query.eq("wilayah_id", input.wilayahId);
+        const { data, error } = await query;
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Daftar rute belum dapat dimuat." });
+
+        const ruteIds = (data ?? []).map((rute) => rute.id);
+        let outletCounts = new Map<string, number>();
+        let salesCounts = new Map<string, number>();
+        if (ruteIds.length > 0) {
+          const [outletResult, salesResult] = await Promise.all([
+            adminClient.from("rute_outlet_assignments").select("rute_id").eq("distributor_id", distributorId).in("rute_id", ruteIds).is("ended_at", null),
+            adminClient.from("rute_sales_assignments").select("rute_id").eq("distributor_id", distributorId).in("rute_id", ruteIds).is("ended_at", null),
+          ]);
+          outletCounts = countByRute(outletResult.data ?? []);
+          salesCounts = countByRute(salesResult.data ?? []);
+        }
+        return (data ?? []).map((rute) => ({ ...toRuteRecord(rute), outletCount: outletCounts.get(rute.id) ?? 0, salesCount: salesCounts.get(rute.id) ?? 0 }));
+      }),
+    createRute: adminTenantProcedure.mutation(
+      z.object({
+        wilayahId: z.string().uuid(),
+        kode: z.string().trim().min(1, "Kode minimal 1 karakter.").max(40, "Kode maksimal 40 karakter."),
+        nama: z.string().trim().min(2, "Nama minimal 2 karakter.").max(120, "Nama maksimal 120 karakter."),
+        keterangan: z.string().trim().max(500, "Keterangan maksimal 500 karakter.").nullable().optional(),
+      }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        const adminClient = getSupabaseAdminClient();
+        const { data: wilayah } = await adminClient.from("wilayah").select("id").eq("id", input.wilayahId).eq("distributor_id", distributorId).maybeSingle();
+        if (!wilayah) throw new TRPCError({ code: "NOT_FOUND", message: "Wilayah tidak ditemukan." });
+        const { data, error } = await adminClient.from("rute").insert({
+          distributor_id: distributorId,
+          wilayah_id: input.wilayahId,
+          kode: input.kode,
+          nama: input.nama,
+          keterangan: input.keterangan ?? null,
+          created_by: ctx.supabaseUser!.id,
+        }).select("id, wilayah_id, kode, nama, keterangan, is_active, created_at, updated_at").maybeSingle();
+        if (error?.code === "23505") throw new TRPCError({ code: "CONFLICT", message: "Kode Rute sudah digunakan." });
+        if (error || !data) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Rute belum dapat dibuat." });
+        return toRuteRecord(data);
+      }),
+    getRute: adminTenantProcedure.query(
+      z.object({ ruteId: z.string().uuid() }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        const adminClient = getSupabaseAdminClient();
+        const { data: rute, error: ruteError } = await adminClient.from("rute").select("id, wilayah_id, kode, nama, keterangan, is_active, created_at, updated_at").eq("id", input.ruteId).eq("distributor_id", distributorId).maybeSingle();
+        if (ruteError || !rute) throw new TRPCError({ code: "NOT_FOUND", message: "Rute tidak ditemukan." });
+        const { data: wilayah, error: wilayahError } = await adminClient.from("wilayah").select("id, kode, nama").eq("id", rute.wilayah_id).eq("distributor_id", distributorId).maybeSingle();
+        if (wilayahError || !wilayah) throw new TRPCError({ code: "NOT_FOUND", message: "Wilayah tidak ditemukan." });
+
+        const [outletResult, salesResult] = await Promise.all([
+          adminClient.from("rute_outlet_assignments").select("rute_id, outlet_id, assigned_at").eq("distributor_id", distributorId).eq("rute_id", input.ruteId).is("ended_at", null),
+          adminClient.from("rute_sales_assignments").select("rute_id, sales_id, assigned_at").eq("distributor_id", distributorId).eq("rute_id", input.ruteId).is("ended_at", null),
+        ]);
+        const outletAssigns = outletResult.data ?? [];
+        const salesAssigns = salesResult.data ?? [];
+
+        const outlets: OutletRecord[] = [];
+        const outletIds = [...new Set(outletAssigns.map((a) => a.outlet_id))];
+        if (outletIds.length > 0) {
+          const { data: outletRows } = await adminClient.from("outlet").select("id, kode, nama, alamat, is_active, created_at, updated_at").eq("distributor_id", distributorId).in("id", outletIds);
+          const outletById = new Map((outletRows ?? []).map((outlet) => [outlet.id, outlet]));
+          for (const a of outletAssigns) {
+            const outlet = outletById.get(a.outlet_id);
+            if (outlet) outlets.push(toOutletRecord(outlet, input.ruteId, rute.nama));
+          }
+        }
+
+        const sales: SalesRecord[] = [];
+        const salesIds = [...new Set(salesAssigns.map((a) => a.sales_id))];
+        if (salesIds.length > 0) {
+          const tenantUsers = await listTenantUsers(distributorId);
+          const salesById = new Map(tenantUsers.filter((user) => user.role === "sales_motoris").map((user) => [user.id, user]));
+          for (const salesUserId of salesIds) {
+            const user = salesById.get(salesUserId);
+            if (!user) continue;
+            sales.push(toSalesRecord(user, new Map([[input.ruteId, rute.nama]]), new Map([[salesUserId, input.ruteId]])));
+          }
+        }
+
+        return {
+          wilayah: { id: wilayah.id, kode: wilayah.kode, nama: wilayah.nama },
+          rute: toRuteRecord(rute),
+          outlets,
+          sales,
+          outletCount: outlets.length,
+          salesCount: sales.length,
+        } satisfies RuteDetail;
+      }),
+    updateRute: adminTenantProcedure.mutation(
+      z.object({
+        ruteId: z.string().uuid(),
+        wilayahId: z.string().uuid().optional(),
+        kode: z.string().trim().min(1, "Kode minimal 1 karakter.").max(40, "Kode maksimal 40 karakter.").optional(),
+        nama: z.string().trim().min(2, "Nama minimal 2 karakter.").max(120, "Nama maksimal 120 karakter.").optional(),
+        keterangan: z.string().trim().max(500, "Keterangan maksimal 500 karakter.").nullable().optional(),
+      }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        if (input.wilayahId === undefined && input.kode === undefined && input.nama === undefined && input.keterangan === undefined) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Tidak ada data yang diubah." });
+        }
+        if (input.wilayahId !== undefined) {
+          const { data: wilayah } = await getSupabaseAdminClient().from("wilayah").select("id").eq("id", input.wilayahId).eq("distributor_id", distributorId).maybeSingle();
+          if (!wilayah) throw new TRPCError({ code: "NOT_FOUND", message: "Wilayah tidak ditemukan." });
+        }
+        const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (input.wilayahId !== undefined) patch.wilayah_id = input.wilayahId;
+        if (input.kode !== undefined) patch.kode = input.kode;
+        if (input.nama !== undefined) patch.nama = input.nama;
+        if (input.keterangan !== undefined) patch.keterangan = input.keterangan;
+        const { data, error } = await getSupabaseAdminClient().from("rute").update(patch).eq("id", input.ruteId).eq("distributor_id", distributorId).select("id, wilayah_id, kode, nama, keterangan, is_active, created_at, updated_at").maybeSingle();
+        if (error?.code === "23505") throw new TRPCError({ code: "CONFLICT", message: "Kode Rute sudah digunakan." });
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Rute belum dapat diperbarui." });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Rute tidak ditemukan." });
+        return toRuteRecord(data);
+      }),
+    setRuteActive: adminTenantProcedure.mutation(
+      z.object({ ruteId: z.string().uuid(), isActive: z.boolean() }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        const { data, error } = await getSupabaseAdminClient().from("rute").update({ is_active: input.isActive, updated_at: new Date().toISOString() }).eq("id", input.ruteId).eq("distributor_id", distributorId).select("id, wilayah_id, kode, nama, keterangan, is_active, created_at, updated_at").maybeSingle();
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Status Rute belum dapat diperbarui." });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Rute tidak ditemukan." });
+        return toRuteRecord(data);
+      }),
+    listOutlet: adminTenantProcedure.query(
+      z.object({ search: z.string().trim().max(160).optional() }).optional(),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        const adminClient = getSupabaseAdminClient();
+        let query = adminClient.from("outlet").select("id, kode, nama, alamat, is_active, created_at, updated_at").eq("distributor_id", distributorId).order("created_at", { ascending: false });
+        if (input?.search) query = query.or(`kode.ilike.%${input.search}%,nama.ilike.%${input.search}%`);
+        const { data, error } = await query;
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Daftar outlet belum dapat dimuat." });
+
+        const outletIds = (data ?? []).map((outlet) => outlet.id);
+        const activeByOutlet = new Map<string, string>();
+        if (outletIds.length > 0) {
+          const { data: acts } = await adminClient.from("rute_outlet_assignments").select("outlet_id, rute_id").eq("distributor_id", distributorId).in("outlet_id", outletIds).is("ended_at", null);
+          for (const a of acts ?? []) activeByOutlet.set(a.outlet_id, a.rute_id);
+        }
+        const ruteIds = [...new Set(activeByOutlet.values())];
+        const ruteNamaById = new Map<string, string>();
+        if (ruteIds.length > 0) {
+          const { data: rutes } = await adminClient.from("rute").select("id, nama").eq("distributor_id", distributorId).in("id", ruteIds);
+          for (const rute of rutes ?? []) ruteNamaById.set(rute.id, rute.nama);
+        }
+
+        return (data ?? []).map((outlet) => {
+          const ruteId = activeByOutlet.get(outlet.id) ?? null;
+          return toOutletRecord(outlet, ruteId, ruteId ? ruteNamaById.get(ruteId) ?? null : null);
+        });
+      }),
+    createOutlet: adminTenantProcedure.mutation(
+      z.object({
+        kode: z.string().trim().min(1, "Kode minimal 1 karakter.").max(40, "Kode maksimal 40 karakter."),
+        nama: z.string().trim().min(2, "Nama minimal 2 karakter.").max(120, "Nama maksimal 120 karakter."),
+        alamat: z.string().trim().min(3, "Alamat minimal 3 karakter.").max(500, "Alamat maksimal 500 karakter."),
+      }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        const { data, error } = await getSupabaseAdminClient().from("outlet").insert({
+          distributor_id: distributorId,
+          kode: input.kode,
+          nama: input.nama,
+          alamat: input.alamat,
+          created_by: ctx.supabaseUser!.id,
+        }).select("id, kode, nama, alamat, is_active, created_at, updated_at").maybeSingle();
+        if (error?.code === "23505") throw new TRPCError({ code: "CONFLICT", message: "Kode Outlet sudah digunakan." });
+        if (error || !data) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Outlet belum dapat dibuat." });
+        return toOutletRecord(data, null, null);
+      }),
+    updateOutlet: adminTenantProcedure.mutation(
+      z.object({
+        outletId: z.string().uuid(),
+        kode: z.string().trim().min(1, "Kode minimal 1 karakter.").max(40, "Kode maksimal 40 karakter.").optional(),
+        nama: z.string().trim().min(2, "Nama minimal 2 karakter.").max(120, "Nama maksimal 120 karakter.").optional(),
+        alamat: z.string().trim().min(3, "Alamat minimal 3 karakter.").max(500, "Alamat maksimal 500 karakter.").optional(),
+      }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        if (input.kode === undefined && input.nama === undefined && input.alamat === undefined) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Tidak ada data yang diubah." });
+        }
+        const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        if (input.kode !== undefined) patch.kode = input.kode;
+        if (input.nama !== undefined) patch.nama = input.nama;
+        if (input.alamat !== undefined) patch.alamat = input.alamat;
+        const { data, error } = await getSupabaseAdminClient().from("outlet").update(patch).eq("id", input.outletId).eq("distributor_id", distributorId).select("id, kode, nama, alamat, is_active, created_at, updated_at").maybeSingle();
+        if (error?.code === "23505") throw new TRPCError({ code: "CONFLICT", message: "Kode Outlet sudah digunakan." });
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Outlet belum dapat diperbarui." });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Outlet tidak ditemukan." });
+        return toOutletRecord(data, null, null);
+      }),
+    setOutletActive: adminTenantProcedure.mutation(
+      z.object({ outletId: z.string().uuid(), isActive: z.boolean() }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        const { data, error } = await getSupabaseAdminClient().from("outlet").update({ is_active: input.isActive, updated_at: new Date().toISOString() }).eq("id", input.outletId).eq("distributor_id", distributorId).select("id, kode, nama, alamat, is_active, created_at, updated_at").maybeSingle();
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Status Outlet belum dapat diperbarui." });
+        if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Outlet tidak ditemukan." });
+        return toOutletRecord(data, null, null);
+      }),
+    listSales: adminTenantProcedure.query(
+      z.object({ search: z.string().trim().max(160).optional() }).optional(),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        const salesUsers = (await listTenantUsers(distributorId)).filter((user) => user.role === "sales_motoris");
+        const { data, error } = await getSupabaseAdminClient().from("rute_sales_assignments").select("sales_id, rute_id").eq("distributor_id", distributorId).is("ended_at", null);
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Penugasan sales belum dapat dimuat." });
+        const activeRuteBySales = new Map((data ?? []).map((a) => [a.sales_id, a.rute_id]));
+        const ruteIds = [...new Set((data ?? []).map((a) => a.rute_id))];
+        const ruteNamaById = new Map<string, string>();
+        if (ruteIds.length > 0) {
+          const { data: rutes } = await getSupabaseAdminClient().from("rute").select("id, nama").eq("distributor_id", distributorId).in("id", ruteIds);
+          for (const rute of rutes ?? []) ruteNamaById.set(rute.id, rute.nama);
+        }
+        let sales = salesUsers.map((user) => toSalesRecord(user, ruteNamaById, activeRuteBySales)).sort((a, b) => a.nama.localeCompare(b.nama));
+        if (input?.search) {
+          const q = input.search.toLowerCase();
+          sales = sales.filter((s) => s.nama.toLowerCase().includes(q) || (s.email ?? "").toLowerCase().includes(q));
+        }
+        return sales;
+      }),
+    assignOutletToRute: adminTenantProcedure.mutation(
+      z.object({ outletId: z.string().uuid(), ruteId: z.string().uuid() }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        return assignOutletToRute(distributorId, ctx.supabaseUser!.id, input.outletId, input.ruteId);
+      }),
+    reassignOutlet: adminTenantProcedure.mutation(
+      z.object({ outletId: z.string().uuid(), ruteId: z.string().uuid() }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        return assignOutletToRute(distributorId, ctx.supabaseUser!.id, input.outletId, input.ruteId);
+      }),
+    assignSalesToRute: adminTenantProcedure.mutation(
+      z.object({ salesId: z.string().uuid(), ruteId: z.string().uuid() }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        return assignSalesToRute(distributorId, ctx.supabaseUser!.id, input.salesId, input.ruteId);
+      }),
+    reassignSales: adminTenantProcedure.mutation(
+      z.object({ salesId: z.string().uuid(), ruteId: z.string().uuid() }),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        return assignSalesToRute(distributorId, ctx.supabaseUser!.id, input.salesId, input.ruteId);
+      }),
+    getAssignmentHistory: adminTenantProcedure.query(
+      z.object({
+        entityType: z.enum(["outlet", "sales"]).optional(),
+        entityId: z.string().uuid().optional(),
+        ruteId: z.string().uuid().optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      }).optional(),
+    )(async ({ ctx, input }) => {
+        const distributorId = getDistributorId(ctx.supabaseUser);
+        if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
+        const adminClient = getSupabaseAdminClient();
+        let query = adminClient.from("assignment_history").select("id, entity_type, entity_id, from_rute_id, to_rute_id, action, changed_by, changed_at").eq("distributor_id", distributorId).order("changed_at", { ascending: false }).limit(input?.limit ?? 50);
+        if (input?.entityType) query = query.eq("entity_type", input.entityType);
+        if (input?.entityId) query = query.eq("entity_id", input.entityId);
+        if (input?.ruteId) query = query.or(`to_rute_id.eq.${input.ruteId},from_rute_id.eq.${input.ruteId}`);
+        const { data, error } = await query;
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Riwayat penugasan belum dapat dimuat." });
+
+        const ruteIds = [...new Set((data ?? []).flatMap((row) => [row.from_rute_id, row.to_rute_id]).filter((id): id is string => Boolean(id)))];
+        const ruteNamaById = new Map<string, string>();
+        if (ruteIds.length > 0) {
+          const { data: rutes } = await adminClient.from("rute").select("id, nama").eq("distributor_id", distributorId).in("id", ruteIds);
+          for (const rute of rutes ?? []) ruteNamaById.set(rute.id, rute.nama);
+        }
+
+        const idsToName: Record<string, string> = {};
+        const outletIds = [...new Set((data ?? []).filter((row) => row.entity_type === "outlet").map((row) => row.entity_id))];
+        const salesIds = [...new Set((data ?? []).filter((row) => row.entity_type === "sales").map((row) => row.entity_id))];
+        if (outletIds.length > 0) {
+          const { data: outlets } = await adminClient.from("outlet").select("id, nama, kode").eq("distributor_id", distributorId).in("id", outletIds);
+          for (const outlet of outlets ?? []) idsToName[outlet.id] = `${outlet.nama} (${outlet.kode})`;
+        }
+        const tenantUsers = await listTenantUsers(distributorId);
+        for (const user of tenantUsers) idsToName[user.id] = user.nama;
+        for (const salesUserId of salesIds) if (!idsToName[salesUserId]) idsToName[salesUserId] = "Sales";
+
+        return (data ?? []).map((row): AssignmentHistoryEntry => ({
+          id: row.id,
+          entityType: row.entity_type as "outlet" | "sales",
+          entityId: row.entity_id,
+          entityName: idsToName[row.entity_id] ?? (row.entity_type === "outlet" ? "Outlet" : "Sales"),
+          fromRuteId: row.from_rute_id ?? null,
+          fromRuteNama: row.from_rute_id ? ruteNamaById.get(row.from_rute_id) ?? "Rute" : null,
+          toRuteId: row.to_rute_id ?? null,
+          toRuteNama: row.to_rute_id ? ruteNamaById.get(row.to_rute_id) ?? "Rute" : null,
+          action: row.action as "assign" | "reassign" | "unassign",
+          changedBy: row.changed_by,
+          changedByName: idsToName[row.changed_by] ?? "Admin",
+          changedAt: row.changed_at,
+        }));
       }),
   }),
   mitraProductionStock: router({

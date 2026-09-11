@@ -28,7 +28,8 @@ export type AppIconName =
   | "eye"
   | "eye-off"
   | "upload"
-  | "notifications";
+  | "notifications"
+  | "map";
 
 type AppIconProps = {
   name: AppIconName;
@@ -97,5 +98,7 @@ export function AppIcon({ name, size = 24, color, strokeWidth = 2 }: AppIconProp
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M12 16V4M7.5 8.5 12 4l4.5 4.5M5 14.5v4h14v-4" /></Svg>;
     case "notifications":
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M6 10a6 6 0 0 1 12 0v4l2 2H4l2-2z" /><Path {...common} d="M10 19h4" /></Svg>;
+    case "map":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z" /><Path {...common} d="M15 5.764v15M9 3.236v15" /></Svg>;
   }
 }

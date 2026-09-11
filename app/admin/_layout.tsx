@@ -33,6 +33,7 @@ export default function AdminLayout() {
         }}
       >
       <Tabs.Screen name="index" options={{ title: "Beranda", tabBarIcon: ({ color }) => <IconSymbol size={24} name="house.fill" color={color} /> }} />
+      <Tabs.Screen name="distribution" options={{ title: "Distribusi", tabBarIcon: ({ color }) => <IconSymbol size={24} name="map.fill" color={color} /> }} />
       <Tabs.Screen name="operational" options={{ title: "Operasional", tabBarIcon: ({ color }) => <IconSymbol size={24} name="shippingbox.fill" color={color} /> }} />
       <Tabs.Screen name="lapangan" options={{ title: "Lapangan", tabBarIcon: ({ color }) => <IconSymbol size={24} name="building.2.fill" color={color} /> }} />
       <Tabs.Screen name="finance" options={{ title: "Keuangan", tabBarIcon: ({ color }) => <IconSymbol size={24} name="wallet.bifold.fill" color={color} /> }} />
