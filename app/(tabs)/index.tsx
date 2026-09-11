@@ -1,6 +1,7 @@
 import { ScreenContainer } from "@/components/screen-container";
 import { MitraProductionDashboard } from "@/components/mitra-production-dashboard";
 import { AppIcon } from "@/components/ui/app-icon";
+import { BellButton } from "@/components/ui/bell-button";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
@@ -37,9 +38,8 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!loading && isAuthenticated && isGenericHome) {
       if (user?.role === "admin") router.replace("/admin" as never);
-      else if (isDistributor) router.replace("/manage-users" as never);
     }
-  }, [isDistributor, isGenericHome, isAuthenticated, loading, router, user?.role]);
+  }, [isGenericHome, isAuthenticated, loading, router, user?.role]);
 
   const handleLogin = async () => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -146,7 +146,22 @@ export default function HomeScreen() {
   }
 
   if (!isMitra) {
-    return <ScreenContainer edges={["top", "bottom", "left", "right"]} />;
+    if (isDistributor) return <DistributorHome />;
+    return (
+      <ScreenContainer className="px-5">
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.homeScrollContent}>
+          <View style={styles.homeContent}>
+            <View style={styles.headerRow}>
+              <View style={styles.headerCopy}>
+                <Text style={[styles.eyebrow, { color: colors.primary }]}>RUANG ADMIN</Text>
+                <Text style={[styles.title, { color: colors.foreground }]}>Beranda</Text>
+              </View>
+              <BellButton />
+            </View>
+          </View>
+        </ScrollView>
+      </ScreenContainer>
+    );
   }
 
   return (
@@ -156,6 +171,94 @@ export default function HomeScreen() {
         <MitraProductionDashboard />
         <MitraStockDashboard />
       </View>
+      </ScrollView>
+    </ScreenContainer>
+  );
+}
+
+function DistributorHome() {
+  const colors = useColors();
+  const { user } = useAuth();
+  const router = useRouter();
+  const requestsQuery = trpc.supplier.requests.useQuery();
+  const inventoryQuery = trpc.inventory.list.useQuery();
+  const requests = requestsQuery.data ?? [];
+  const pendingCount = requests.filter((request) => request.status === "pending").length;
+  const items = inventoryQuery.data ?? [];
+  const totalUnits = items.reduce((sum, item) => sum + item.stockQuantity, 0);
+  const name = user?.name?.trim() || "Distributor";
+
+  return (
+    <ScreenContainer className="px-5">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.homeScrollContent}>
+        <View style={styles.homeContent}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerCopy}>
+              <Text style={[styles.eyebrow, { color: colors.primary }]}>DISTRIBUTOR</Text>
+              <Text style={[styles.title, { color: colors.foreground }]}>Beranda</Text>
+            </View>
+            <View style={[styles.headerIcon, { backgroundColor: `${colors.primary}18` }]}>
+              <AppIcon name="verified-user" size={25} color={colors.primary} />
+            </View>
+            <BellButton />
+          </View>
+          <Text style={[styles.subtitle, { color: colors.muted }]}>Rangkuman pengajuan dan barang titipan ruang kerja Anda.</Text>
+
+          <View style={[styles.welcomeCard, { backgroundColor: colors.primary }]}>
+            <Text style={[styles.welcomeEyebrow, { color: "#D9EFE5" }]}>SELAMAT DATANG</Text>
+            <Text style={[styles.welcomeText, { color: colors.background }]}>{name}</Text>
+            <Text style={[styles.welcomeHint, { color: "#D9EFE5" }]}>Kelola persetujuan, operasional, dan keuangan dari satu tempat.</Text>
+          </View>
+
+          <View style={styles.dhSummaryGrid}>
+            <View style={[styles.dhSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.dhSummaryValue, { color: pendingCount > 0 ? colors.warning : colors.foreground }]}>{requestsQuery.isLoading ? "–" : pendingCount}</Text>
+              <Text style={[styles.dhSummaryLabel, { color: colors.muted }]}>Pengajuan perlu disetujui</Text>
+            </View>
+            <View style={[styles.dhSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.dhSummaryValue, { color: colors.foreground }]}>{inventoryQuery.isLoading ? "–" : items.length}</Text>
+              <Text style={[styles.dhSummaryLabel, { color: colors.muted }]}>Barang titipan</Text>
+            </View>
+            <View style={[styles.dhSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.dhSummaryValue, { color: colors.foreground }]}>{inventoryQuery.isLoading ? "–" : totalUnits}</Text>
+              <Text style={[styles.dhSummaryLabel, { color: colors.muted }]}>Total unit stok</Text>
+            </View>
+          </View>
+
+          <Text style={[styles.sectionLabel, { color: colors.foreground }]}>AKSI CEPAT</Text>
+          <View style={[styles.dhMenuCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Pressable onPress={() => router.navigate("/(tabs)/persetujuan" as never)} style={({ pressed }) => [styles.dhRow, { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }, pressed && styles.pressed]}>
+              <View style={[styles.dhRowIcon, { backgroundColor: `${colors.primary}18` }]}>
+                <AppIcon name="send" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.dhRowCopy}>
+                <Text style={[styles.dhRowTitle, { color: colors.foreground }]}>Persetujuan supplier</Text>
+                <Text style={[styles.dhRowSubtitle, { color: colors.muted }]}>{pendingCount} pengajuan menunggu keputusan Anda</Text>
+              </View>
+              <AppIcon name="chevron-right" size={21} color={colors.muted} />
+            </Pressable>
+            <Pressable onPress={() => router.navigate("/(tabs)/operasional" as never)} style={({ pressed }) => [styles.dhRow, { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }, pressed && styles.pressed]}>
+              <View style={[styles.dhRowIcon, { backgroundColor: `${colors.primary}18` }]}>
+                <AppIcon name="inventory" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.dhRowCopy}>
+                <Text style={[styles.dhRowTitle, { color: colors.foreground }]}>Kelola barang titipan</Text>
+                <Text style={[styles.dhRowSubtitle, { color: colors.muted }]}>Pantau dan perbarui stok resmi per Mitra UMKM</Text>
+              </View>
+              <AppIcon name="chevron-right" size={21} color={colors.muted} />
+            </Pressable>
+            <Pressable onPress={() => router.navigate("/(tabs)/keuangan" as never)} style={({ pressed }) => [styles.dhRow, pressed && styles.pressed]}>
+              <View style={[styles.dhRowIcon, { backgroundColor: `${colors.primary}18` }]}>
+                <AppIcon name="wallet" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.dhRowCopy}>
+                <Text style={[styles.dhRowTitle, { color: colors.foreground }]}>Keuangan ruang kerja</Text>
+                <Text style={[styles.dhRowSubtitle, { color: colors.muted }]}>Ringkasan nilai stok dan estimasi pendapatan</Text>
+              </View>
+              <AppIcon name="chevron-right" size={21} color={colors.muted} />
+            </Pressable>
+          </View>
+        </View>
       </ScrollView>
     </ScreenContainer>
   );
@@ -290,6 +393,21 @@ const styles = StyleSheet.create({
   stockErrorText: { fontSize: 12, lineHeight: 18, marginTop: 7 },
   stockRetryButton: { alignSelf: "flex-start", borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 12 },
   stockRetryText: { fontSize: 12, fontWeight: "800" },
+  headerCopy: { flex: 1, paddingRight: 12 },
+  headerIcon: { width: 50, height: 50, borderRadius: 16, alignItems: "center", justifyContent: "center", marginTop: 2 },
+  welcomeEyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 1.6 },
+  welcomeText: { fontSize: 22, lineHeight: 28, fontWeight: "800", marginTop: 7 },
+  welcomeHint: { fontSize: 12, lineHeight: 18, marginTop: 7 },
+  dhSummaryGrid: { flexDirection: "row", gap: 8, marginTop: 14 },
+  dhSummaryCard: { flex: 1, minHeight: 76, borderWidth: 1, borderRadius: 16, padding: 12 },
+  dhSummaryValue: { fontSize: 24, fontWeight: "800" },
+  dhSummaryLabel: { fontSize: 10, lineHeight: 14, marginTop: 5 },
+  dhMenuCard: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 16, marginTop: 12 },
+  dhRow: { flexDirection: "row", alignItems: "center", paddingVertical: 15 },
+  dhRowIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  dhRowCopy: { flex: 1, marginLeft: 12 },
+  dhRowTitle: { fontSize: 14, fontWeight: "700" },
+  dhRowSubtitle: { fontSize: 11, marginTop: 3 },
   pressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.65 },
 });

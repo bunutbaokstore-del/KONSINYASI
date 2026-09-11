@@ -262,7 +262,7 @@ export default function ManageUsersScreen() {
     <ScreenContainer edges={["top", "bottom", "left", "right"]} className="px-5">
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Kembali" onPress={() => router.back()} style={({ pressed }) => [styles.backButton, { borderColor: colors.border }, pressed && styles.pressed]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Kembali" onPress={() => { if (router.canGoBack()) router.back(); else router.replace("/(tabs)/profile" as never); }} style={({ pressed }) => [styles.backButton, { borderColor: colors.border }, pressed && styles.pressed]}>
             <AppIcon name="chevron-left" size={21} color={colors.foreground} />
           </Pressable>
           <View style={styles.headerCopy}>

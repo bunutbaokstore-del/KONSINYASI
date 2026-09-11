@@ -44,6 +44,7 @@ export default function ManageInventoryScreen() {
   const isSaving = updateMutation.isPending;
   const items = inventoryQuery.data ?? [];
   const isManager = user?.role === "admin" || user?.role === "distributor";
+  const goBack = () => { if (router.canGoBack()) router.back(); else router.replace("/(tabs)" as never); };
 
   const selectedMitra = useMemo(() => mitrasQuery.data?.find((mitra) => mitra.id === form.mitraUserId), [form.mitraUserId, mitrasQuery.data]);
 
@@ -118,7 +119,7 @@ export default function ManageInventoryScreen() {
   };
 
   if (loading) return <ScreenContainer edges={["top", "bottom", "left", "right"]} className="items-center justify-center"><ActivityIndicator size="large" color={colors.primary} /></ScreenContainer>;
-  if (!isAuthenticated || !isManager) return <ScreenContainer edges={["top", "bottom", "left", "right"]} className="items-center justify-center px-6"><Text style={[styles.deniedTitle, { color: colors.foreground }]}>Akses tidak tersedia</Text><Text style={[styles.deniedText, { color: colors.muted }]}>Halaman ini hanya dapat digunakan oleh Admin atau Distributor.</Text><Pressable onPress={() => router.back()} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.secondaryButtonText, { color: colors.primary }]}>Kembali</Text></Pressable></ScreenContainer>;
+  if (!isAuthenticated || !isManager) return <ScreenContainer edges={["top", "bottom", "left", "right"]} className="items-center justify-center px-6"><Text style={[styles.deniedTitle, { color: colors.foreground }]}>Akses tidak tersedia</Text><Text style={[styles.deniedText, { color: colors.muted }]}>Halaman ini hanya dapat digunakan oleh Admin atau Distributor.</Text><Pressable onPress={goBack} style={({ pressed }) => [styles.secondaryButton, { borderColor: colors.primary }, pressed && styles.pressed]}><Text style={[styles.secondaryButtonText, { color: colors.primary }]}>Kembali</Text></Pressable></ScreenContainer>;
 
   return (
     <ScreenContainer className="px-5">
@@ -129,7 +130,7 @@ export default function ManageInventoryScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={inventoryQuery.isRefetching} onRefresh={() => void inventoryQuery.refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
         ListHeaderComponent={<View>
-          <View style={styles.headerRow}><Pressable accessibilityRole="button" accessibilityLabel="Kembali" onPress={() => router.back()} style={({ pressed }) => [styles.backButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.backText, { color: colors.foreground }]}>‹</Text></Pressable><View style={styles.headerCopy}><Text style={[styles.eyebrow, { color: colors.primary }]}>RUANG KERJA</Text><Text style={[styles.title, { color: colors.foreground }]}>Kelola barang titipan</Text></View><View style={[styles.headerIcon, { backgroundColor: `${colors.primary}16` }]}><AppIcon name="inventory" size={20} color={colors.primary} /></View></View>
+          <View style={styles.headerRow}><Pressable accessibilityRole="button" accessibilityLabel="Kembali" onPress={goBack} style={({ pressed }) => [styles.backButton, { borderColor: colors.border }, pressed && styles.pressed]}><Text style={[styles.backText, { color: colors.foreground }]}>‹</Text></Pressable><View style={styles.headerCopy}><Text style={[styles.eyebrow, { color: colors.primary }]}>RUANG KERJA</Text><Text style={[styles.title, { color: colors.foreground }]}>Kelola barang titipan</Text></View><View style={[styles.headerIcon, { backgroundColor: `${colors.primary}16` }]}><AppIcon name="inventory" size={20} color={colors.primary} /></View></View>
           <Text style={[styles.subtitle, { color: colors.muted }]}>Pantau barang dan stok resmi untuk setiap Mitra UMKM. Barang baru masuk melalui persetujuan supplier.</Text>
           {editingId ? <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.formTitleRow}><Text style={[styles.formTitle, { color: colors.foreground }]}>Edit barang titipan</Text><Pressable onPress={resetForm} accessibilityRole="button"><Text style={[styles.cancelText, { color: colors.primary }]}>Batal edit</Text></Pressable></View>

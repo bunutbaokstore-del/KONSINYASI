@@ -88,10 +88,11 @@ export default function NotificationsScreen() {
             accessibilityLabel={`${item.title}. ${item.isRead ? "Sudah dibaca" : "Belum dibaca"}`}
             onPress={() => {
               if (!item.isRead) markRead.mutate({ notificationId: item.id });
-              const isRequestNotification = item.notificationType === "request_pending" || item.notificationType === "request_approved" || item.notificationType === "request_rejected";
-              if (isRequestNotification) {
+              if (item.notificationType === "request_pending") {
                 if (item.requestId) router.push({ pathname: "/supplier-requests", params: { requestId: item.requestId } });
-                else if (item.notificationType === "request_pending") router.push("/supplier-requests");
+                else router.push("/supplier-requests");
+              } else if (item.notificationType === "request_approved" || item.notificationType === "request_rejected") {
+                router.push("/supplier-requests");
               }
             }}
             style={({ pressed }) => [styles.card, { backgroundColor: item.isRead ? colors.surface : `${colors.primary}10`, borderColor: item.isRead ? colors.border : `${colors.primary}55` }, pressed && styles.pressed]}

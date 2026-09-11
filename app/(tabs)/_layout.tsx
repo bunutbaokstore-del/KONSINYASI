@@ -14,6 +14,7 @@ export default function TabLayout() {
   const isSysAdmin = user?.platformRole === "sys_admin";
   const isAdmin = !isSysAdmin && user?.role === "admin";
   const isMitra = !isSysAdmin && user?.role === "mitra_umkm";
+  const isDistributor = !isSysAdmin && user?.role === "distributor";
   const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
   const tabBarHeight = 56 + bottomPadding;
 
@@ -65,6 +66,30 @@ export default function TabLayout() {
         options={{
           title: "Keuangan",
           href: isAdmin ? null : isMitra ? undefined : null,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="wallet.bifold.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="persetujuan"
+        options={{
+          title: "Persetujuan",
+          href: isAdmin ? null : isMitra ? null : isDistributor ? undefined : null,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="paperplane.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="operasional"
+        options={{
+          title: "Operasional",
+          href: isAdmin ? null : isMitra ? null : isDistributor ? undefined : null,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="shippingbox.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="keuangan"
+        options={{
+          title: "Keuangan",
+          href: isAdmin ? null : isMitra ? null : isDistributor ? undefined : null,
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="wallet.bifold.fill" color={color} />,
         }}
       />
