@@ -1,11 +1,11 @@
 import { MitraProductShipment } from "@/components/mitra-product-shipment";
 import { MitraShipmentReceiving } from "@/components/mitra-shipment-receiving";
-import { MitraProductRequest } from "@/components/mitra-product-request";
+import { MitraProductCatalog } from "@/components/mitra-product-catalog";
 import { AppIcon } from "@/components/ui/app-icon";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 type DistributionView = "supply" | "shipment" | "receiving" | "history" | "products";
 type RequestType = "new_item" | "stock_change";
@@ -13,7 +13,7 @@ type SupplierRequest = { id: string; requestType: string; itemId: string | null;
 
 const MENUS: { key: DistributionView; label: string; icon: "send" | "shippingbox" | "inventory" | "verified" }[] = [
   { key: "supply", label: "Ajukan Supply", icon: "send" },
-  { key: "products", label: "Tambah Produk", icon: "inventory" },
+  { key: "products", label: "Katalog Produk", icon: "inventory" },
   { key: "shipment", label: "Pengiriman", icon: "shippingbox" },
   { key: "receiving", label: "Penerimaan", icon: "inventory" },
   { key: "history", label: "Riwayat Distribusi", icon: "verified" },
@@ -104,21 +104,25 @@ export function MitraDistribution() {
             <AppIcon name="chevron-left" size={16} color={colors.primary} />
             <Text style={[styles.backText, { color: colors.primary }]}>Kembali ke Distribusi</Text>
           </Pressable>
-          {view === "products" ? <MitraProductRequest /> : view === "supply" ? (
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.title, { color: colors.foreground }]}>Ajukan Supply</Text>
-              <Text style={[styles.helper, { color: colors.muted }]}>Pilih jenis pengajuan. Identitas Mitra, Distributor, Product Master, dan Consignment Item ditentukan oleh backend persistent.</Text>
-              <Text style={[styles.label, { color: colors.foreground }]}>Jenis Pengajuan</Text>
-              <View style={styles.chips}>
-                <Choice label="New Item" selected={requestType === "new_item"} onPress={() => { setRequestType("new_item"); setError(null); }} colors={colors} />
-                <Choice label="Stock Change" selected={requestType === "stock_change"} onPress={() => { setRequestType("stock_change"); setError(null); }} colors={colors} />
-              </View>
-              {requestType === "new_item" ? <NewItemForm name={name} sku={sku} unit={unit} proposedStock={proposedStock} minimumStock={minimumStock} reason={reason} setName={setName} setSku={setSku} setUnit={setUnit} setProposedStock={setProposedStock} setMinimumStock={setMinimumStock} setReason={setReason} colors={colors} /> : null}
-              {requestType === "stock_change" ? <StockChangeForm items={stockChangeItems} query={stockQuery} itemId={itemId} proposedStock={proposedStock} reason={reason} setItemId={setItemId} setProposedStock={setProposedStock} setReason={setReason} colors={colors} /> : null}
-              {error ? <Text style={[styles.error, { color: colors.error }]}>{error}</Text> : null}
-              {requestType ? <Pressable accessibilityRole="button" disabled={isSubmitting || stockQuery.isLoading} onPress={() => void submitRequest()} style={({ pressed }) => [styles.button, { backgroundColor: colors.primary }, pressed && styles.pressed, (isSubmitting || stockQuery.isLoading) && styles.disabled]}><Text style={[styles.buttonText, { color: colors.background }]}>{isSubmitting ? "Mengirim..." : "Ajukan Supply"}</Text></Pressable> : null}
-              {message ? <Text style={[styles.message, { color: colors.success }]}>{message}</Text> : null}
-            </View>
+          {view === "products" ? <MitraProductCatalog /> : view === "supply" ? (
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Text style={[styles.title, { color: colors.foreground }]}>Ajukan Supply</Text>
+                  <Text style={[styles.helper, { color: colors.muted }]}>Pilih jenis pengajuan. Identitas Mitra, Distributor, Product Master, dan Consignment Item ditentukan oleh backend persistent.</Text>
+                  <Text style={[styles.label, { color: colors.foreground }]}>Jenis Pengajuan</Text>
+                  <View style={styles.chips}>
+                    <Choice label="New Item" selected={requestType === "new_item"} onPress={() => { setRequestType("new_item"); setError(null); }} colors={colors} />
+                    <Choice label="Stock Change" selected={requestType === "stock_change"} onPress={() => { setRequestType("stock_change"); setError(null); }} colors={colors} />
+                  </View>
+                  {requestType === "new_item" ? <NewItemForm name={name} sku={sku} unit={unit} proposedStock={proposedStock} minimumStock={minimumStock} reason={reason} setName={setName} setSku={setSku} setUnit={setUnit} setProposedStock={setProposedStock} setMinimumStock={setMinimumStock} setReason={setReason} colors={colors} /> : null}
+                  {requestType === "stock_change" ? <StockChangeForm items={stockChangeItems} query={stockQuery} itemId={itemId} proposedStock={proposedStock} reason={reason} setItemId={setItemId} setProposedStock={setProposedStock} setReason={setReason} colors={colors} /> : null}
+                  {error ? <Text style={[styles.error, { color: colors.error }]}>{error}</Text> : null}
+                  {requestType ? <Pressable accessibilityRole="button" disabled={isSubmitting || stockQuery.isLoading} onPress={() => void submitRequest()} style={({ pressed }) => [styles.button, { backgroundColor: colors.primary }, pressed && styles.pressed, (isSubmitting || stockQuery.isLoading) && styles.disabled]}><Text style={[styles.buttonText, { color: colors.background }]}>{isSubmitting ? "Mengirim..." : "Ajukan Supply"}</Text></Pressable> : null}
+                  {message ? <Text style={[styles.message, { color: colors.success }]}>{message}</Text> : null}
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
           ) : view === "shipment" ? <MitraProductShipment onSaved={() => selectView("history")} /> : view === "receiving" ? <MitraShipmentReceiving onSaved={() => selectView("history")} /> : <DistributionHistory query={requestsQuery} stockItems={stockChangeItems} colors={colors} />}
         </View>
       ) : null}
