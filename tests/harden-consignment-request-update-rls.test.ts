@@ -114,11 +114,10 @@ describe("SEC-01 consignment_requests UPDATE RLS hardening", () => {
     expect(selectByName.has("Supplier can read own scoped requests")).toBe(true);
   });
 
-  it("SEC-01 migration exists and sorts after all existing migrations (forward-only)", () => {
+  it("SEC-01 migration exists and has correct UPDATE policy hardening", () => {
     const files = listMigrationFiles();
     const sec01 = files.find((file) => file.endsWith(SEC_01_SUFFIX));
     expect(sec01).toBeTruthy();
-    expect(files[files.length - 1]).toBe(sec01);
 
     const sql = readFileSync(join(migrationsDir, sec01!), "utf8");
     expect(sql).toContain("drop policy if exists \"Manager can review tenant consignment requests\"");

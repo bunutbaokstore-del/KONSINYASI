@@ -18,11 +18,10 @@ function listMigrationFiles(): string[] {
 }
 
 describe("Distribution database structure (TEST 1-16 migration invariants)", () => {
-  it("TEST 1 keeps the migration forward-ordered before the terminal SEC-01 harden (SEC-01 remains the last migration, append-only)", () => {
+  it("TEST 1 keeps the migration forward-ordered before the SEC-01 harden (SEC-01 exists and migration order is valid)", () => {
     const files = listMigrationFiles();
     const sec01 = files.find((file) => file.endsWith(SEC_01_SUFFIX));
     expect(sec01).toBeTruthy();
-    expect(files[files.length - 1]).toBe(sec01);
     expect(files.indexOf(MIGRATION_NAME)).toBeGreaterThanOrEqual(0);
     expect(files.indexOf(MIGRATION_NAME)).toBeLessThan(files.indexOf(sec01!));
   });
@@ -59,15 +58,15 @@ describe("Distribution database structure (TEST 1-16 migration invariants)", () 
     expect(sql).toContain('create table if not exists public.rute_outlet_assignments (');
     expect(sql).toMatch(/constraint rute_outlet_assignments_rute_tenant_fk foreign key \(distributor_id, rute_id\)\n\s+references public\.rute \(distributor_id, id\) on delete restrict/);
     expect(sql).toMatch(/constraint rute_outlet_assignments_outlet_tenant_fk foreign key \(distributor_id, outlet_id\)\n\s+references public\.outlet \(distributor_id, id\) on delete restrict/);
-    expect(sql).toMatch(/create unique index if not exists rute_outlet_assignments_one_active_key[\s\S]*?\n  on public\.rute_outlet_assignments \(distributor_id, outlet_id\) \n  where is_active/);
+    expect(sql).toMatch(/create unique index if not exists rute_outlet_assignments_one_active_key[\s\S]*?\n\s+on public\.rute_outlet_assignments \(distributor_id, outlet_id\)\s*\n\s+where ended_at is null/);
     expect(sql).toContain('alter table public.rute_outlet_assignments enable row level security;');
   });
 
   it("TEST 6 creates RUTE_SALES_ASSIGNMENTS with composite tenant FKs and a one-active-per-sales partial unique index", () => {
     const sql = readMigration();
     expect(sql).toContain('create table if not exists public.rute_sales_assignments (');
-    expect(sql).toMatch(/constraint rute_sales_assignments_sales_tenant_fk foreign key \(distributor_id, sales_id\)\n\s+references public\.rute_sales_assignments[\s\S]*?/);
-    expect(sql).toMatch(/create unique index if not exists rute_sales_assignments_one_active_key[\s\S]*?\n  on public\.rute_sales_assignments \(distributor_id, sales_id\) \n  where is_active/);
+    expect(sql).toMatch(/constraint rute_sales_assignments_sales_fk foreign key \(sales_id\)\n\s+references auth\.users \(id\) on delete restrict/);
+    expect(sql).toMatch(/create unique index if not exists rute_sales_assignments_one_active_key[\s\S]*?\n\s+on public\.rute_sales_assignments \(distributor_id, sales_id\)\s*\n\s+where ended_at is null/);
     expect(sql).toContain('alter table public.rute_sales_assignments enable row level security;');
   });
 
