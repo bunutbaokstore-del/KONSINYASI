@@ -21,7 +21,7 @@ export default function AdminLayout() {
           tabBarActiveBackgroundColor: `${colors.primary}14`,
           headerShown: false,
           tabBarButton: HapticTab,
-          tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+          tabBarLabelStyle: { fontSize: 10, fontWeight: "700", letterSpacing: -0.2 },
           tabBarStyle: {
             paddingTop: 8,
             paddingBottom: bottomPadding,
@@ -32,12 +32,15 @@ export default function AdminLayout() {
           },
         }}
       >
-      <Tabs.Screen name="index" options={{ title: "Beranda", tabBarIcon: ({ color }) => <IconSymbol size={24} name="house.fill" color={color} /> }} />
-      <Tabs.Screen name="distribution" options={{ title: "Distribusi", tabBarIcon: ({ color }) => <IconSymbol size={24} name="map.fill" color={color} /> }} />
-      <Tabs.Screen name="operational" options={{ title: "Operasional", tabBarIcon: ({ color }) => <IconSymbol size={24} name="shippingbox.fill" color={color} /> }} />
-      <Tabs.Screen name="lapangan" options={{ title: "Lapangan", tabBarIcon: ({ color }) => <IconSymbol size={24} name="building.2.fill" color={color} /> }} />
-      <Tabs.Screen name="finance" options={{ title: "Keuangan", tabBarIcon: ({ color }) => <IconSymbol size={24} name="wallet.bifold.fill" color={color} /> }} />
-      <Tabs.Screen name="account" options={{ title: "Akun", tabBarIcon: ({ color }) => <IconSymbol size={24} name="person.fill" color={color} /> }} />
+      <Tabs.Screen name="index" options={{ title: "Beranda", tabBarIcon: ({ color }) => <IconSymbol size={22} name="house.fill" color={color} /> }} />
+      <Tabs.Screen name="distribution" options={{ href: null }} />
+      <Tabs.Screen name="operational" options={{ title: "Operasional", tabBarIcon: ({ color }) => <IconSymbol size={22} name="shippingbox.fill" color={color} /> }} />
+      <Tabs.Screen name="lapangan" options={{ title: "Lapangan", tabBarIcon: ({ color }) => <IconSymbol size={22} name="building.2.fill" color={color} /> }} />
+      <Tabs.Screen name="finance" options={{ title: "Keuangan", tabBarIcon: ({ color }) => <IconSymbol size={22} name="wallet.bifold.fill" color={color} /> }} />
+      <Tabs.Screen name="account" options={{ title: "Akun", tabBarIcon: ({ color }) => <IconSymbol size={22} name="person.fill" color={color} /> }} />
+      <Tabs.Screen name="rute" options={{ href: null }} />
+      <Tabs.Screen name="wilayah" options={{ href: null }} />
+      <Tabs.Screen name="products" options={{ href: null }} />
       </Tabs>
     </AdminRouteGuard>
   );

@@ -35,7 +35,7 @@ create index if not exists wilayah_distributor_idx on public.wilayah (distributo
 -- =============================================================================
 create table if not exists public.rute (
   id uuid not null default gen_random_uuid(),
-  distributor_id uuid not null,
+  distributor_id uuid not null references auth.users (id) on delete restrict,
   wilayah_id uuid not null,
   kode text not null,
   nama text not null,
@@ -108,8 +108,8 @@ create table if not exists public.rute_outlet_assignments (
 );
 
 create unique index if not exists rute_outlet_assignments_one_active_key
-  on public.rute_outlet_assignments (distributor_id, outlet_id) 
-  where is_active;
+  on public.rute_outlet_assignments (distributor_id, outlet_id)
+  where ended_at is null;
 
 create index if not exists rute_outlet_assignments_outlet_idx
   on public.rute_outlet_assignments (distributor_id, outlet_id, ended_at)
@@ -125,7 +125,7 @@ create table if not exists public.rute_sales_assignments (
   id uuid not null default gen_random_uuid(),
   distributor_id uuid not null references auth.users (id) on delete restrict,
   rute_id uuid not null,
-  sales_id uuid not null references auth.users (id) on delete restrict,
+  sales_id uuid not null,
   assigned_by uuid not null references auth.users (id) on delete restrict,
   assigned_at timestamptz not null default now(),
   ended_at timestamptz,
@@ -133,16 +133,16 @@ create table if not exists public.rute_sales_assignments (
   constraint rute_sales_assignments_pkey primary key (id),
   constraint rute_sales_assignments_rute_tenant_fk foreign key (distributor_id, rute_id)
     references public.rute (distributor_id, id) on delete restrict,
-  constraint rute_sales_assignments_sales_tenant_fk foreign key (distributor_id, sales_id)
-    references public.rute_sales_assignments (distributor_id, id) on delete restrict,
+  constraint rute_sales_assignments_sales_fk foreign key (sales_id)
+    references auth.users (id) on delete restrict,
   constraint rute_sales_assignments_period_check check (
     ended_at is null or ended_at >= assigned_at
   )
 );
 
 create unique index if not exists rute_sales_assignments_one_active_key
-  on public.rute_sales_assignments (distributor_id, sales_id) 
-  where is_active;
+  on public.rute_sales_assignments (distributor_id, sales_id)
+  where ended_at is null;
 
 create index if not exists rute_sales_assignments_sales_idx
   on public.rute_sales_assignments (distributor_id, sales_id, ended_at)

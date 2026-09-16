@@ -1,0 +1,837 @@
+Project KONSINYASI {
+  database_type: "PostgreSQL"
+  Note: "DBML v1.4 - DESAIN ULANG PENUH (blueprint sebelum migration diterapkan). Mencakup WORKFLOW 1 (Serah Terima Muatan / Surat Jalan Gudang<->Sales), WORKFLOW 2 (Kunjungan Outlet: LUNAS & KONSINYASI), domain TRANSACTIONS & TRANSACTION_ITEMS (header + item untuk laporan, histori, dokumen, rekonsiliasi pembayaran, dan fondasi accounting), AUDIT REJECTED CHECK-IN (visit_checkin_attempts), serta konvensi infrastruktur (RLS, idempotency, anti negative stock, race safety). v1.4 menyelesaikan gap hasil FINAL TECHNICAL AUDIT: F1 (satu active visit per Sales) & F4 (audit rejected check-in). Status: READY FOR REVIEW -- BUKAN READY FOR MIGRATION."
+}
+
+// =====================================================================
+// PENYELARASAN DENGAN RUNTIME EXISTING (baca dulu sebelum migrasi)
+// =====================================================================
+// 1. Identitas: auth.users adalah sumber kebenaran. `distributors.id = auth.users.id`;
+//    `users` = profil/klaim aplikasi yang menceminkan JWT app_metadata (role + distributor_id)
+//    yang dibaca getUserRole/getDistributorId di server.
+// 2. Semua tulis dipaksa lewat RPC SECURITY DEFINER yang GRANT-nya hanya service_role
+//    (pola sama seperti assign_outlet_to_rute / receive_mitra_shipment di migrasi lama).
+// 3. Nama tabel struktur dipertahankan agar server/routers.ts tidak banyak berubah.
+//    PERUBAHAN NAMA/ADJUSTMENT vs DB live (perlu ALTER saat migrasi, belum dieksekusi):
+//    a) distributor_stock.available_quantity  -> distributor_stock.quantity (decimal(18,3)).
+//    b) outlet.is_active                      -> outlets.status (enum ACTIVE/INACTIVE).
+//    c) distributor_stock.quantity dikunci non-negatif (CHECK quantity >= 0). DB live masih integer.
+// 4. Perbaikan bug migrasi 20260915595958:
+//    (a) rute_sales_assignments.sales_id -> users.id (jangan self-reference).
+//    (b) partial unique index memakai `where ended_at is null` (bukan is_active).
+// 5. Tidak ada DELETE/DROP di domain bisnis; penonaktifan = status atau ended_at.
+// 6. ALUR STOK YANG BENAR (wajib):
+//    GUDANG --SJ GUDANG_TO_SALES--> SALES STOCK --VISIT (add/restock)--> OUTLET STOCK --SALES_OUT--> (terjual)
+//    OUTLET STOCK --RETURN--> SALES STOCK --SJ SALES_TO_GUDANG--> GUDANG
+//    Distributor (gudang) HANYA berubah lewat Surat Jalan yang sudah COMPLETED, dengan final_qty.
+
+// =====================================================================
+// ENUM
+// =====================================================================
+Enum user_role {
+  DISTRIBUTOR
+  ADMIN
+  SALES_MOTORIS
+  HRD
+  SUPERVISOR
+  MITRA_UMKM
+  PLATFORM_SYS_ADMIN
+}
+
+Enum outlet_status {
+  ACTIVE
+  INACTIVE
+}
+
+Enum sj_direction {
+  GUDANG_TO_SALES
+  SALES_TO_GUDANG
+}
+
+Enum sj_status {
+  DRAFT
+  READY
+  CHECKED
+  DISCREPANCY
+  CONFIRMED
+  RETURN_CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+Enum sj_movement_type {
+  SJ_OUT
+  SJ_RETURN
+}
+
+Enum visit_status {
+  DRAFT
+  CHECKED_IN
+  FINALIZED
+  CANCELLED
+}
+
+Enum checkin_attempt_status {
+  REJECTED
+}
+
+Enum card_status {
+  DRAFT
+  APPLIED
+}
+
+Enum visit_condition {
+  TOKO_BARU
+  TOKO_BUKA
+  TOKO_TUTUP
+  MASIH_STOK
+  TOKO_NONAKTIF
+}
+
+Enum transaction_status {
+  LUNAS
+  KONSINYASI
+}
+
+Enum payment_status {
+  LUNAS
+  SEBAGIAN
+  PIUTANG
+}
+
+Enum payment_method {
+  CASH
+  TRANSFER
+  QRIS
+  LAINNYA
+}
+
+Enum receivable_status {
+  OPEN
+  PARTIAL
+  PAID
+}
+
+Enum ownership_type {
+  KONSINYASI
+  MILIK_OUTLET
+}
+
+// movement type UNTUK DOMAIN KUNJUNGAN (domain SJ memakai sj_movement_type terpisah)
+Enum movement_type {
+  ADD_IN
+  RESTOCK_IN
+  SALES_OUT
+  RETURN_OUT
+  OWNERSHIP_TRANSFER
+}
+
+Enum document_type {
+  STRUK_LUNAS
+  STRUK_SERAH_TERIMA
+  STRUK_KONSINYASI
+  NOTA_KONSINYASI_NONAKTIF
+  SURAT_JALAN
+  KWITANSI
+  INVOICE
+  LAINNYA
+}
+
+Enum photo_type {
+  FOTO_DEPAN_OUTLET
+  FOTO_PRODUK
+  FOTO_AKHIR
+  LAINNYA
+}
+
+Enum event_type {
+  VISIT_CREATED
+  VISIT_CHECKED_IN
+  CARD_APPLIED
+  VISIT_FINALIZED
+  VISIT_CANCELLED
+  PAYMENT_RECORDED
+  RECEIVABLE_SETTLED
+}
+
+Enum sj_event_type {
+  SJ_CREATED
+  SJ_READY
+  SJ_CHECKED
+  SJ_DISCREPANCY
+  SJ_CONFIRMED
+  SJ_RETURN_CONFIRMED
+  SJ_COMPLETED
+  SJ_CANCELLED
+}
+
+// =====================================================================
+// 1. ORGANISASI / USER / ROLE
+// =====================================================================
+Table distributors {
+  id uuid [pk, ref: > auth.users.id]
+  name varchar [not null]
+  code varchar [unique]
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table users {
+  id uuid [pk, ref: > auth.users.id]
+  distributor_id uuid [ref: > distributors.id]
+  name varchar [not null]
+  email varchar
+  phone varchar
+  role user_role [not null]  // disimpan sebagai varchar; cermin JWT app_metadata.role
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (distributor_id, role)
+  }
+
+  Note: "Profil aplikasi. role & distributor_id di tabel ini sumber admin-managed; runtime tetap memakai JWT app_metadata."
+}
+
+// =====================================================================
+// 2. WILAYAH / RUTE
+// =====================================================================
+Table wilayah {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  kode varchar [not null]
+  nama varchar [not null]
+  keterangan text
+  is_active boolean [not null, default: true]
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (distributor_id, kode) [unique]
+    (distributor_id, is_active)
+  }
+}
+
+Table rute {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  wilayah_id uuid [not null, ref: > wilayah.id]
+  kode varchar [not null]
+  nama varchar [not null]
+  keterangan text
+  is_active boolean [not null, default: true]
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (distributor_id, kode) [unique]
+    (distributor_id, wilayah_id, is_active)
+  }
+}
+
+// =====================================================================
+// 3. OUTLET (lifecycle terpisah dari condition pada product card)
+// =====================================================================
+Table outlets {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  kode varchar [not null]
+  nama varchar [not null]
+  nama_pemilik varchar
+  no_hp varchar
+  alamat text
+  latitude decimal(10,7)
+  longitude decimal(10,7)
+  gps_radius_m integer [not null, default: 100]
+  status outlet_status [not null, default: ACTIVE]  // lifecycle outlet; BUKAN condition product card
+  foto_depan_url text  // storage bucket outlet-photos (FOTO_DEPAN_OUTLET)
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (distributor_id, kode) [unique]
+    (distributor_id, status)
+  }
+
+  Note: "outlets.status = lifecycle status outlet. TIDAK identik dengan condition di visit_product_cards (mis. outlets.status=ACTIVE bisa memiliki card condition TOKO_TUTUP/MASIH_STOK/TOKO_NONAKTIF di visit tertentu). Selalu dievaluasi terpisah, tidak disinkronkan otomatis."
+}
+
+// =====================================================================
+// 4. ASSIGNMENT (Admin menentukan Sales & Outlet melalui Rute)
+// =====================================================================
+Table rute_outlet_assignments {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  rute_id uuid [not null, ref: > rute.id]
+  outlet_id uuid [not null, ref: > outlets.id]
+  assigned_at timestamptz [not null]
+  ended_at timestamptz  // null = aktif
+  assigned_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+
+  indexes {
+    (distributor_id, outlet_id) [unique]  // partial: where ended_at is null
+    (distributor_id, rute_id)
+  }
+
+  Note: "Satu OUTLET satu assignment aktif. Reassign = tutup lama + buka baru + tulis assignment_history."
+}
+
+Table rute_sales_assignments {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  rute_id uuid [not null, ref: > rute.id]
+  sales_id uuid [not null, ref: > users.id]  // BENAR: ke users; bukan self-reference
+  assigned_at timestamptz [not null]
+  ended_at timestamptz  // null = aktif
+  assigned_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+
+  indexes {
+    (distributor_id, sales_id) [unique]  // partial: where ended_at is null
+    (distributor_id, rute_id)
+  }
+
+  Note: "Sales TIDAK memilih rute/outlet sendiri. Pemicu validitas kunjungan & muatan: sales harus punya assignment aktif (ended_at null) di rute tsb."
+}
+
+Table assignment_history {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  entity_type varchar [not null]  // OUTLET / SALES
+  entity_id uuid [not null]
+  from_rute_id uuid [ref: > rute.id]
+  to_rute_id uuid [ref: > rute.id]
+  action varchar [not null]  // ASSIGN / REASSIGN / UNASSIGN
+  changed_by uuid [not null, ref: > users.id]
+  changed_at timestamptz [not null]
+  metadata jsonb [not null, default: "{}"]
+
+  indexes {
+    (distributor_id, entity_type, entity_id, changed_at)
+    (distributor_id, to_rute_id, changed_at)
+    (distributor_id, from_rute_id, changed_at)
+  }
+
+  Note: "Append-only; audit untuk assignment. Audit kunjungan memakai visit_events; audit Surat Jalan memakai surat_jalan_events."
+}
+
+// =====================================================================
+// 5. PRODUK (master; kartu produk = referensi + snapshot)
+// =====================================================================
+Table products {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  sku varchar [not null]
+  name varchar [not null]
+  unit varchar
+  category varchar
+  size varchar
+  selling_price decimal(18,2) [not null, default: 0]
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (distributor_id, sku) [unique]
+  }
+
+  Note: "RLS dipastikan: distributor, admin, dan SALES_MOTORIS tenant tsb wajib bisa SELECT (untuk kartu produk & muatan)."
+}
+
+// =====================================================================
+// 6. STOK GUDANG (DISTRIBUTOR)
+// GUDANG HANYA BERUBAH MELALUI SURAT JALAN YANG SUDAH COMPLETED.
+// =====================================================================
+Table distributor_stock {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  product_id uuid [not null, ref: > products.id]
+  quantity decimal(18,3) [not null, default: 0]  // CHECK (quantity >= 0)
+  updated_at timestamptz [not null]
+
+  indexes {
+    (distributor_id, product_id) [unique]
+  }
+
+  Note: "Stok gudang. PERUBAHAN NAMA: available_quantity -> quantity. KONSTRAINT: CHECK (quantity >= 0). HANYA RPC serah terima (SJ GUDANG_TO_SALES/SALES_TO_GUDANG) yang boleh men-debit/kredit; finalize_visit TIDAK menyentuh tabel ini."
+}
+
+// =====================================================================
+// 7. SALES STOCK (MUATAN SALES)
+// Hasil final accepted quantity SJ GUDANG -> SALES. Sumber stok untuk kunjungan.
+// =====================================================================
+Table sales_stock {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  sales_id uuid [not null, ref: > users.id]
+  product_id uuid [not null, ref: > products.id]
+  quantity decimal(18,3) [not null, default: 0]  // CHECK (quantity >= 0)
+  updated_at timestamptz [not null]
+
+  indexes {
+    (sales_id, product_id) [unique]
+    (distributor_id, product_id)
+  }
+
+  Note: "Muatan yang dibawa Sales. Alur: GUDANG -> SJ GUDANG_TO_SALES -> final accepted qty -> SALES STOCK. Debit saat kunjungan memakai restock_qty/add_qty dan saat return SJ SALES_TO_GUDANG. KONSTRAINT: CHECK (quantity >= 0)."
+}
+
+// =====================================================================
+// 8. STOK OUTLET (ownership)
+// =====================================================================
+Table outlet_stock {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  outlet_id uuid [not null, ref: > outlets.id]
+  product_id uuid [not null, ref: > products.id]
+  quantity decimal(18,3) [not null, default: 0]  // CHECK (quantity >= 0)
+  ownership_type ownership_type [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (outlet_id, product_id, ownership_type) [unique]
+    (distributor_id, product_id)
+  }
+
+  Note: "KONSINYASI = titipan distributor di outlet (belum terjual/belum dibeli lunas). MILIK_OUTLET = barang yang telah dibeli LUNAS dan menjadi milik outlet — berlaku untuk TOKO_BARU LUNAS, TOKO_BUKA LUNAS, dan sisa TOKO_NONAKTIF. Sumber: SALES STOCK -> KUNJUNGAN -> OUTLET STOCK. KONSTRAINT: CHECK (quantity >= 0)."
+}
+
+// =====================================================================
+// 9. SURAT JALAN (WORKFLOW 1 - SERAH TERIMA MUATAN)
+// =====================================================================
+Table surat_jalan {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  sj_number varchar [not null]
+  direction sj_direction [not null]
+  sales_id uuid [not null, ref: > users.id]
+  status sj_status [not null, default: DRAFT]
+  sj_date date [not null]
+  notes text
+  // discrepancy / resolution metadata (aggreagate header; rincian di item)
+  has_discrepancy boolean [not null, default: false]
+  resolved_by uuid [ref: > users.id]
+  resolved_at timestamptz
+  confirmed_at timestamptz  // saat CONFIRMED / RETURN_CONFIRMED
+  completed_at timestamptz  // saat COMPLETED (transfer stok dieksekusi)
+  cancelled_at timestamptz
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (distributor_id, sj_number) [unique]
+    (sales_id, sj_date)
+    (distributor_id, status)
+  }
+
+  Note: "STATUS MACHINE GUDANG_TO_SALES: DRAFT -> READY -> CHECKED -> (DISCREPANCY -> CONFIRMED) -> COMPLETED. SALES_TO_GUDANG: DRAFT -> READY -> CHECKED -> (DISCREPANCY -> RETURN_CONFIRMED) -> COMPLETED. CANCELLED tersedia di kedua arah. STOK TIDAK BERUBAH pada DRAFT/READY/CHECKED/DISCREPANCY. Transfer stok hanya dieksekusi pada transisi ke COMPLETED dan hanya memakai final_qty."
+}
+
+Table surat_jalan_items {
+  id uuid [pk]
+  surat_jalan_id uuid [not null, ref: > surat_jalan.id]
+  product_id uuid [not null, ref: > products.id]
+  expected_qty decimal(18,3) [not null, default: 0]  // GUDANG_TO_SALES: qty dikirim Gudang; SALES_TO_GUDANG: qty yang seharusnya dikembalikan
+  actual_qty decimal(18,3)  // GUDANG_TO_SALES: qty yang diterima Sales (setelah checking)
+  physical_check_qty decimal(18,3)  // SALES_TO_GUDANG: hasil pemeriksaan fisik oleh Gudang/Admin
+  final_qty decimal(18,3)  // qty final yang disetujui; NULL sampai CONFIRMED/RETURN_CONFIRMED
+  is_discrepancy boolean [not null, default: false]
+  discrepancy_reason text  // WAJIB saat actual/physical != expected (dipaksa RPC save/check)
+  resolved_by uuid [ref: > users.id]
+  resolved_at timestamptz
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (surat_jalan_id, product_id) [unique]
+    (product_id)
+  }
+
+  Note: "GUDANG_TO_SALES: expected = dikirim Gudang, actual = diterima Sales, final = disetujui setelah checking/discrepancy. SALES_TO_GUDANG: expected = seharusnya kembali, physical_check = pemeriksaan fisik, final = diterima Gudang. is_discrepancy=true wajib punya discrepancy_reason; hanya Admin/Resolve yang boleh mengisi resolved_by/resolved_at dan final_qty."
+}
+
+// =====================================================================
+// 10. STOCK MOVEMENT SURAT JALAN (ledger idempoten - anti double transfer SJ)
+// =====================================================================
+Table surat_jalan_stock_movements {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  surat_jalan_id uuid [not null, ref: > surat_jalan.id]
+  surat_jalan_item_id uuid [not null, ref: > surat_jalan_items.id]
+  product_id uuid [not null, ref: > products.id]
+  movement_type sj_movement_type [not null]
+  quantity decimal(18,3) [not null]  // > 0; memakai final_qty item
+  prev_source_stock decimal(18,3)
+  prev_target_stock decimal(18,3)
+  note text
+  posted_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+
+  indexes {
+    (surat_jalan_id, surat_jalan_item_id, movement_type) [unique]  // ANTI DOUBLE TRANSFER SJ
+    (distributor_id, product_id, created_at)
+    (surat_jalan_id)
+  }
+
+  Note: "Ditulis HANYA ketika SJ transisi ke COMPLETED, menggunakan final_qty, dalam satu transaksi bersama update distributor_stock & sales_stock. SJ_OUT = Gudang -> Sales (distributor_stock -, sales_stock +); SJ_RETURN = Sales -> Gudang (sales_stock -, distributor_stock +). unique(surat_jalan_id, surat_jalan_item_id, movement_type) membuat posting ulang tidak mungkin. Pemisahan dari domain visit (visit_stock_movements) sesuai kebutuhan idempotency terpisah."
+}
+
+// =====================================================================
+// 11. AUDIT SURAT JALAN
+// =====================================================================
+Table surat_jalan_events {
+  id uuid [pk]
+  surat_jalan_id uuid [not null, ref: > surat_jalan.id]
+  event_type sj_event_type [not null]
+  actor_id uuid [not null, ref: > users.id]
+  metadata jsonb [not null, default: "{}"]
+  created_at timestamptz [not null]
+
+  indexes {
+    (surat_jalan_id, created_at)
+  }
+
+  Note: "Append-only; jejak status machine SJ (dibuat, ready, checked, discrepancy, confirm, complete, cancel)."
+}
+
+// =====================================================================
+// 12. KUNJUNGAN OUTLET (WORKFLOW 2)
+// =====================================================================
+Table visits {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  outlet_id uuid [not null, ref: > outlets.id]
+  sales_id uuid [not null, ref: > users.id]
+  rute_id uuid [not null, ref: > rute.id]
+  visit_date date [not null]
+  status visit_status [not null, default: DRAFT]
+  transaction_status transaction_status  // LUNAS / KONSINYASI; diisi saat kartu diproses
+  checkin_at timestamptz
+  checkin_latitude decimal(10,7)
+  checkin_longitude decimal(10,7)
+  checkout_at timestamptz
+  notes text
+  finalized_at timestamptz
+  finalized_by uuid [ref: > users.id]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (sales_id, visit_date)
+    (outlet_id, visit_date)
+    (distributor_id, status)
+    // PARTIAL UNIQUE (distributor_id, sales_id) WHERE status IN ('DRAFT','CHECKED_IN') - REQUIRES SQL IMPLEMENTATION
+  }
+
+  Note: "Status: DRAFT -> CHECKED_IN -> FINALIZED (irreversible), atau CANCELLED. Stok HANYA berubah saat transisi ke FINALIZED (RPC finalize_visit). Sales harus punya assignment aktif di rute tsb (trigger). Check-in memvalidasi jarak ke koordinat outlet (gps_radius_m). transaction_status bersifat per visit; condition tetap per product card."
+  Note: "F1 - SATU SALES MAKSIMAL SATU ACTIVE VISIT: seorang Sales hanya boleh memiliki maksimal satu visit berstatus DRAFT atau CHECKED_IN pada satu waktu. FINALIZED dan CANCELLED BUKAN active visit (tidak dihitung). CONSTRAINT: PARTIAL UNIQUE INDEX (distributor_id, sales_id) WHERE status IN ('DRAFT','CHECKED_IN') [REQUIRES SQL IMPLEMENTATION - tidak representable di DBML; harus ditulis di migration]. Partial index hanya mengunci baris berstatus active, sehingga TIDAK menghalangi visit FINALIZED/CANCELLED maupun pembuatan visit berikutnya setelah visit sebelumnya selesai."
+  Note: "CHECK-IN GAGAL/REJECTED BUKAN visit: check-in yang ditolak validasi GPS tidak membuat baris visits; dicatat sebagai visit_checkin_attempts (lihat tabel berikut). visits.status TIDAK pernah berisi REJECTED."
+}
+
+// ---------------------------------------------------------------------
+// F4 - CHECK-IN ATTEMPT (AUDIT REJECTED CHECK-IN)
+// ---------------------------------------------------------------------
+Table visit_checkin_attempts {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  sales_id uuid [not null, ref: > users.id]
+  outlet_id uuid [not null, ref: > outlets.id]
+  rute_id uuid [ref: > rute.id]  // nullable jika rute belum dapat ditentukan
+  attempted_at timestamptz [not null]
+  latitude decimal(10,7)
+  longitude decimal(10,7)
+  gps_radius_m integer [not null]
+  distance_m decimal(10,2) [not null]
+  rejection_reason text [not null]
+  status checkin_attempt_status [not null, default: REJECTED]
+  created_at timestamptz [not null]
+
+  indexes {
+    (sales_id, attempted_at)
+    (outlet_id, attempted_at)
+    (distributor_id, attempted_at)
+    (status, attempted_at)
+  }
+
+  Note: "F4 - AUDIT REJECTED CHECK-IN. Mencatat SETIAP percobaan check-in yang DITOLAK sebelum visit valid dibuat. REJECTED CHECK-IN BUKAN visits (tidak ada baris visits; visits.status tidak pernah REJECTED). ALUR: SALES -> REQUEST CHECK-IN -> GPS VALIDATION -> [VALID] CREATE VISIT (CHECKED_IN) / [INVALID] CREATE CHECK-IN ATTEMPT (REJECTED/AUDIT)."
+  Note: "TENANT & RLS: distributor_id konsisten (FK ke distributors.id); sales_id ke users.id; outlet_id ke outlets.id; rute_id NULLABLE ke rute.id (diisi bila dapat ditentukan dari assignment aktif sales). Ditulis HANYA via RPC checkin_validate (service_role). RLS: distributor/admin baca seluruh ruang kerja; sales baca attempt miliknya."
+}
+
+// =====================================================================
+// 13. KARTU PRODUK (SATU VISIT -> BANYAK CARD; TIAP CARD KONDISI SENDIRI)
+// =====================================================================
+Table visit_product_cards {
+  id uuid [pk]
+  visit_id uuid [not null, ref: > visits.id]
+  product_id uuid [not null, ref: > products.id]
+  status card_status [not null, default: DRAFT]
+  condition visit_condition [not null]
+
+  // STOCK
+  stock_before decimal(18,3) [not null, default: 0]  // CHECK (>= 0)
+  physical_check decimal(18,3) [not null, default: 0]  // CHECK (>= 0)
+  add_qty decimal(18,3) [not null, default: 0]  // CHECK (>= 0)
+  restock_qty decimal(18,3) [not null, default: 0]  // CHECK (>= 0)
+  old_sales_qty decimal(18,3) [not null, default: 0]  // laku lama = stock_before - physical_check (utk Toko Buka KONSINYASI)
+  sales_qty decimal(18,3) [not null, default: 0]  // CHECK (>= 0)
+  return_qty decimal(18,3) [not null, default: 0]  // CHECK (>= 0)
+  stock_after decimal(18,3) [not null, default: 0]  // CHECK (>= 0)
+
+  // PRICE & PAYMENT (snapshot harga saat kunjungan)
+  selling_price decimal(18,2) [not null, default: 0]
+  payment_status payment_status  // LUNAS / SEBAGIAN / PIUTANG; utk LUNAS selalu LUNAS
+  amount_due decimal(18,2) [not null, default: 0]   // total transaksi kartu (biasanya sales_qty * selling_price)
+  amount_paid decimal(18,2) [not null, default: 0]  // jumlah dibayar di visit
+
+  // ALASAN (WAJIB utk TOKO_TUTUP & TOKO_NONAKTIF)
+  alasan text
+
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (visit_id)
+    (product_id, condition)
+  }
+
+  Note: "RUMUS & ATURAN PER KONDISI - STATUS LUNAS: (1) TOKO_BARU: stock_before=0, physical=0, add=Qty beli (dari sales_stock), sales=add, restock=0, return=0, stock_after=add_qty, 100% LUNAS, barang menjadi MILIK_OUTLET, foto produk wajib, STRUK_LUNAS. (2) TOKO_BUKA: stock_before auto, physical input, restock input (dari sales_stock), sales input, return=0, stock_after = physical_check + restock_qty - sales_qty, 100% LUNAS, barang MILIK_OUTLET, foto produk wajib, STRUK_LUNAS. (3) TOKO_TUTUP: tanpa sales/restock/return, stok tidak berubah (stock_after=stock_before), alasan wajib, foto akhir wajib, TIDAK ada struk lunas. (4) MASIH_STOK: tanpa sales/restock/return, stok tidak berubah, foto produk wajib, foto akhir wajib. (5) TOKO_NONAKTIF: cek fisik, restok (dari sales_stock), penjualan, retur=0, 100% LUNAS, sisa menjadi MILIK_OUTLET (ownership transfer), alasan wajib, foto produk wajib, foto akhir wajib, TIDAK ada struk lunas."
+  Note: "RUMUS & ATURAN PER KONDISI - STATUS KONSINYASI: (1) TOKO_BARU: stock_before=0, physical=0, add input Sales, restock=0, laku lama=0, return=0, stock_after=add_qty, foto produk wajib, STRUK_SERAH_TERIMA. (2) TOKO_BUKA: add=0, laku lama AUTO = stock_before - physical_check, restock input, retur input, stock_after = stock_before - laku_lama + restock_qty - return_qty, pembayaran LUNAS/SEBAGIAN/PIUTANG. (3) TOKO_TUTUP: stok tidak berubah, alasan wajib, foto akhir wajib, tanpa transaksi. (4) MASIH_STOK: physical=0, add=0, restock=0, laku=0, retur=0, stok tidak berubah, foto produk wajib, foto akhir wajib. (5) TOKO_NONAKTIF: cek fisik, laku lama, restok=0, sisa ditarik/retur, stock_after=0, pembayaran 100% LUNAS, foto produk wajib, alasan wajib, foto akhir wajib, NOTA_KONSINYASI_NONAKTIF wajib."
+  Note: "PAYMENT INVARIANT: amount_paid + receivable_amount = amount_due. Utk wajib LUNAS: amount_paid = amount_due & receivable 0. SUMBER STOK: add/restock OPSIONAL hanya dari sales_stock (debit sales_stock, kredit outlet_stock); DISTRIBUTOR_STOCK TIDAK pernah disentuh di sini."
+}
+
+// =====================================================================
+// 14. FOTO & DOKUMEN (storage bucket: visit-photos, visit-documents, outlet-photos)
+// =====================================================================
+Table visit_photos {
+  id uuid [pk]
+  visit_id uuid [not null, ref: > visits.id]
+  card_id uuid [ref: > visit_product_cards.id]  // WAJIB utk FOTO_PRODUK; NULL utk FOTO_AKHIR
+  photo_type photo_type [not null]
+  photo_url text [not null]
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+
+  indexes {
+    (visit_id)
+    (card_id)
+  }
+
+  Note: "FOTO_PRODUK wajib terikat ke product card (card_id NOT NULL); FOTO_AKHIR terikat ke visit (card_id NULL). FOTO_DEPAN_OUTLET disimpan di outlets.foto_depan_url (bucket outlet-photos). VALIDASI RPC finalize_visit: finalisasi WAJIB DITOLAK jika foto wajib (per kondisi di visit_product_cards) belum tersedia."
+}
+
+Table visit_documents {
+  id uuid [pk]
+  visit_id uuid [not null, ref: > visits.id]
+  card_id uuid [ref: > visit_product_cards.id]
+  transaction_id uuid [ref: > transactions.id]  // nullable; tautan opsional ke header transactions utk histori dokumen transaksi
+  doc_type document_type [not null]
+  file_url text [not null]
+  note text
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+
+  indexes {
+    (visit_id)
+    (card_id)
+    (transaction_id)
+  }
+
+  Note: "STRUK_LUNAS (LUNAS Baru/Buka), STRUK_SERAH_TERIMA (Konsinyasi Baru), STRUK_KONSINYASI (Konsinyasi Buka), NOTA_KONSINYASI_NONAKTIF (Konsinyasi Nonaktif), SURAT_JALAN (lampiran dokumen SJ bila perlu). transaction_id (nullable) = tautan opsional ke transactions untuk kebutuhan histori/dokumen transaksi; hubungan existing ke visit & card TETAP dipertahankan."
+}
+
+// =====================================================================
+// 15. PEMBAYARAN & PIUTANG
+// =====================================================================
+Table visit_payments {
+  id uuid [pk]
+  visit_id uuid [not null, ref: > visits.id]
+  card_id uuid [not null, ref: > visit_product_cards.id]
+  amount decimal(18,2) [not null]  // CHECK (amount > 0)
+  method payment_method [not null]
+  note text
+  received_at timestamptz [not null]
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+
+  indexes {
+    (visit_id)
+    (card_id)
+  }
+
+  Note: "Catatan penerimaan nyata. amount_paid per kartu = SUM(visit_payments.amount). Konsisten dengan invariant amount_paid + receivable = amount_due."
+}
+
+Table visit_receivables {
+  id uuid [pk]
+  visit_id uuid [not null, ref: > visits.id]
+  card_id uuid [not null, ref: > visit_product_cards.id]
+  amount decimal(18,2) [not null]  // CHECK (amount > 0)
+  paid_amount decimal(18,2) [not null, default: 0]  // CHECK (paid_amount >= 0)
+  status receivable_status [not null, default: OPEN]
+due_date date  // nullable; TIDAK hardcoded (30 hari belum ditetapkan sebagai business rule). Isi sesuai aturan pembayaran yang ditetapkan.
+    settled_at timestamptz
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (status, due_date)
+    (visit_id)
+    (card_id)
+  }
+
+  Note: "Untuk KONSINYASI (TOKO_BUKA) dengan pembayaran SEBAGIAN / PIUTANG. Alur: transaction -> payment -> receivable -> settlement (RPC settle_receivable; catat visit_events). Invariant: paid_amount + receivable_amount = total_amount."
+}
+
+// =====================================================================
+// 16. TRANSACTIONS & TRANSACTION ITEMS (HEADER/ITEM - LAPORAN & HISTORI)
+// =====================================================================
+Table transactions {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  visit_id uuid [not null, ref: > visits.id]
+  transaction_number varchar [not null]  // generated idempotent oleh RPC; unik per tenant
+  transaction_status transaction_status [not null]  // LUNAS / KONSINYASI; === visits.transaction_status
+  transaction_date date [not null]  // diambil dari visits.visit_date
+  total_amount decimal(18,2) [not null, default: 0]  // CHECK (total_amount >= 0)
+  amount_paid decimal(18,2) [not null, default: 0]  // CHECK (amount_paid >= 0)
+  receivable_amount decimal(18,2) [not null, default: 0]  // CHECK (receivable_amount >= 0)
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (distributor_id, transaction_number) [unique]  // nomor transaksi unik per tenant
+    (visit_id)
+    (distributor_id, transaction_date)
+    (distributor_id, transaction_status)
+  }
+
+  Note: "HEADER TRANSAKSI per VISIT. Dibuat SATU transaksi per visit oleh RPC finalize_visit, HANYA bila visit memiliki minimal satu kartu penjualan (total_amount > 0) sesuai aturan TOKO_TUTUP & MASIH_STOK 'tanpa transaksi penjualan'. TRANSAKSI TANPA ITEM TIDAK DIPERKENANKAN. Semua nilai di sini adalah HEADER/SNAPSHOT laporan, BUKAN sumber kebenaran kedua."
+  Note: "SOURCE OF TRUTH (tetap di domain existing): transaction_status === visits.transaction_status; total_amount = SUM(transaction_items.line_total) = SUM(visit_product_cards.amount_due) atas kartu yang ditagih; amount_paid = SUM(visit_payments.amount) untuk visit; receivable_amount = total_amount - amount_paid (rekonsiliasi dengan visit_receivables). INVARIANT: total_amount = amount_paid + receivable_amount. Rekonsiliasi diverifikasi di dalam finalize_visit."
+  Note: "transaction_number dibuat idempotent oleh RPC (mis. urutan harian per distributor); unique(distributor_id, transaction_number) menjamin retry/posting ulang TIDAK menghasilkan nomor ganda. transaction_date mengikuti visits.visit_date (kejadian bisnis), created_at sebagai jejak pembuatan."
+}
+
+Table transaction_items {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]  // rantai tenant; WAJIB sama dgn transactions.distributor_id
+  transaction_id uuid [not null, ref: > transactions.id]
+  visit_product_card_id uuid [not null, ref: > visit_product_cards.id]  // relasi ke product card TIDAK dihilangkan
+  product_id uuid [not null, ref: > products.id]  // snapshot/reference produk
+  quantity decimal(18,3) [not null]  // CHECK (quantity > 0) - unit penjualan pada kartu terkait
+  selling_price decimal(18,2) [not null]  // CHECK (selling_price >= 0)
+  discount decimal(18,2) [not null, default: 0]  // CHECK (discount >= 0)
+  line_total decimal(18,2) [not null]  // CHECK (line_total >= 0) = (quantity * selling_price) - discount
+  created_at timestamptz [not null]
+
+  indexes {
+    (transaction_id, visit_product_card_id) [unique]  // satu item per kartu per transaksi - anti duplikasi/idempotent
+    (transaction_id)
+    (product_id)
+    (distributor_id, product_id, created_at)
+  }
+
+  Note: "SNAPSHOT/DETAIL per kartu penjualan pada transaksi untuk laporan & histori. BUKAN sumber kebenaran untuk condition/stock/amount. CONDITION SELALU berasal dari visit_product_cards.condition (single source of truth); TIDAK ada kolom condition di tabel ini. Quantity/valuasi mengikuti nilai pada kartu terkait; TIDAK menciptakan sumber stock baru. Satu item per kartu per transaksi (unique(transaction_id, visit_product_card_id))."
+  Note: "FK RANTAI TENANT: distributor_id pada item === transactions.distributor_id === visits.distributor_id; hanya RPC finalize_visit (service_role) yang menulis dan memvalidasi rantai tenant sebelum INSERT, sehingga data distributor A mustahil menunjuk ke distributor B."
+  Note: "TRACEABILITY: transaction -> visit (transactions.visit_id), transaction -> product card (transaction_items.visit_product_card_id), card -> product (visit_product_cards.product_id; snapshot transaction_items.product_id sebagai referensi)."
+}
+
+// =====================================================================
+// 17. STOCK MOVEMENT KUNJUNGAN (ledger idempoten - anti double, domain visit)
+// =====================================================================
+Table visit_stock_movements {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  visit_id uuid [not null, ref: > visits.id]
+  card_id uuid [not null, ref: > visit_product_cards.id]
+  outlet_id uuid [not null, ref: > outlets.id]
+  product_id uuid [not null, ref: > products.id]
+  movement_type movement_type [not null]
+  quantity decimal(18,3) [not null]  // CHECK (quantity > 0)
+  prev_sales_stock decimal(18,3)
+  prev_outlet_stock decimal(18,3)
+  note text
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+
+  indexes {
+    (card_id, movement_type) [unique]  // ANTI DOUBLE STOCK MOVEMENT (VISIT)
+    (distributor_id, outlet_id, product_id, created_at)
+    (visit_id)
+  }
+
+  Note: "Ditulis hanya oleh RPC finalize_visit. PEMETAAN: ADD_IN & RESTOCK_IN = debit sales_stock, kredit outlet_stock (MILIK_OUTLET untuk LUNAS TOKO_BARU/TOKO_BUKA; KONSINYASI untuk KONSINYASI TOKO_BARU & restok TOKO_BUKA); SALES_OUT = debit outlet_stock (MILIK_OUTLET untuk LUNAS; KONSINYASI untuk KONSINYASI); RETURN_OUT = debit outlet_stock, kredit sales_stock (utk dibawa kembali ke gudang via SJ SALES_TO_GUDANG); OWNERSHIP_TRANSFER = ubah ownership_type KONSINYASI -> MILIK_OUTLET (non-aktif LUNAS, tanpa perubahan qty). unique(card_id, movement_type) mencegah posting ganda. Sumber kunjungan = SALES STOCK, BUKAN distributor_stock."
+}
+
+// =====================================================================
+// 18. AUDIT KUNJUNGAN
+// =====================================================================
+Table visit_events {
+  id uuid [pk]
+  visit_id uuid [not null, ref: > visits.id]
+  event_type event_type [not null]
+  actor_id uuid [not null, ref: > users.id]
+  metadata jsonb [not null, default: "{}"]
+  created_at timestamptz [not null]
+
+  indexes {
+    (visit_id, created_at)
+  }
+
+  Note: "Append-only; jejak kunjungan (check-in, kartu diaplikasikan, finalisasi, pembayaran, pelunasan piutang)."
+}
+
+// =====================================================================
+// RINGKASAN ATURAN (RLS, RPC, LOCKING, IDEMPOTENCY)
+// =====================================================================
+Note: "
+ATURAN KETAT (RLS) - semua tulis lewat RPC SECURITY DEFINER, GRANT hanya service_role; SELECT tenant-scoped, distributor_id konsisten di seluruh tabel tenant:
+- Distributor: baca seluruh ruang kerjanya.
+- Admin: baca seluruh ruang kerja distributor_id dari JWT app_metadata; hak RESOLVE discrepancy SJ & final correction (tulis lewat RPC).
+- Sales Motoris: hanya melihat data yang menjadi assignment-nya (melalui rute_sales_assignments aktif): visit miliknya, kartu visit miliknya, transaksi & item transaksi dari visit miliknya (read-only), visit_checkin_attempts miliknya (read-only), products & sales_stock ruang kerjanya, outlet milik rute yang dia pegang. Sales BISA membuat visit & input card (DRAFT/CHECKED_IN) serta checking SJ (actual/physical qty), TAPI TIDAK bisa mengubah master Wilayah/Rute, TIDAK bisa transfer stok SJ sebagai Admin, TIDAK bisa mem-bypass finalize.
+- HRD/Supervisor: mode monitor (SELECT agregat).
+- Transfer stok (SJ & visit) HANYA via RPC/service transaction yang aman.
+
+RPC WAJIB (service_role only):
+1. sj_create / sj_ready / sj_check (input actual/physical; auto-detect discrepancy; alasan wajib bila discrepancy)
+2. sj_resolve (Admin: final correction -> final_qty; wajib ada discrepancy_reason bila discrepancy)
+3. sj_confirm (CONFIRMED / RETURN_CONFIRMED)
+4. sj_complete (COMPLETED; satu-satunya titik transfer stok Gudang<->Sales memakai final_qty; tulis surat_jalan_stock_movements)
+5. finalize_visit (validasi status/card/alasan/foto/payment; sumber stok SALES STOCK -> OUTLET STOCK; tulis visit_stock_movements; buat/update transactions & transaction_items (header + snapshot item, idempotent) dalam transaksi yang sama; update sales_stock/outlet_stock; tulis payments/receivables; set FINALIZED)
+6. settle_receivable (pembayaran piutang; VISIT: utk kunjungan -> visit_events)
+7. checkin_validate (validasi GPS terhadap gps_radius_m outlet; VALID -> buat visits ber-status CHECKED_IN (dilindungi partial unique F1); INVALID -> INSERT visit_checkin_attempts status REJECTED untuk audit)
+
+RACE CONDITION & LOCKING (wajib diterapkan di RPC):
+- SJ: BEGIN; SELECT surat_jalan ... FOR UPDATE; SELECT surat_jalan_items ... FOR UPDATE; SELECT distributor_stock & sales_stock rows FOR UPDATE dengan URUTAN LOCK KONSISTEN (mis. ORDER BY id/product/outlet stabil); validasi final_qty & non-negatif; INSERT surat_jalan_stock_movements (diblokir unique bila sudah ada -> anti double); update balance; SET status COMPLETED; COMMIT.
+- VISIT: BEGIN; SELECT visits ... FOR UPDATE; validasi status; SELECT sales_stock & outlet_stock rows FOR UPDATE dalam urutan konsisten; terapkan rumus stock_after; validasi quantity >= 0 (TIDAK BOLEH NEGATIF); INSERT visit_stock_movements (unique card+type -> anti double); update balances + ownership; tulis payments/receivables; INSERT transactions & transaction_items (snapshot, unique(transaction_id, visit_product_card_id) -> anti duplikasi); SET FINALIZED; COMMIT.
+- Semua perhitungan stok dilakukan di dalam lock sehingga tidak ada negative stock, tidak ada double transfer, tidak ada partial stock movement; transaksi gagal = rollback penuh.
+
+IDEMPOTENCY - proteksi TERPISAH per domain:
+1. SJ: unique(surat_jalan_id, surat_jalan_item_id, movement_type) pada surat_jalan_stock_movements.
+2. VISIT: unique(card_id, movement_type) pada visit_stock_movements.
+3. TRANSACTION: unique(distributor_id, transaction_number) pada transactions; unique(transaction_id, visit_product_card_id) pada transaction_items.
+4. ACTIVE VISIT: partial unique (distributor_id, sales_id) WHERE status IN ('DRAFT','CHECKED_IN') pada visits - [REQUIRES SQL IMPLEMENTATION] (F1).
+(Dan unique (sj_number) per distributor, unique assignment aktif per outlet/sales, unique (surat_jalan_id, product_id) item.)
+
+NEGATIVE STOCK PREVENTION - CHECK (quantity >= 0) pada distributor_stock, sales_stock, outlet_stock, dan seluruh kolom qty visit_product_cards yang relevan; semua juga divalidasi kembali di dalam RPC dengan FOR UPDATE.
+
+SOURCE OF TRUTH vs SNAPSHOT (domain transaksi/payment/receivable) - TIDAK ADA DUA SUMBER KEBENARAN:
+- condition    -> SATU-SATUNYA sumber: visit_product_cards.condition; TIDAK diulang di transaction_items.
+- amount_due   -> sumber: visit_product_cards.amount_due (per kartu); transactions.total_amount & transaction_items.line_total = header/snapshot turunan, WAJIB rekonsiliasi dengan kartu.
+- amount_paid  -> sumber: visit_payments (ledger penerimaan); nilai amount_paid di kartu dan transactions = agregasi/snapshot.
+- receivable   -> sumber: visit_receivables (saldo piutang); receivable_amount di transactions = turunan (total_amount - amount_paid).
+- stock qty    -> sumber: saldo terkunci (distributor_stock/sales_stock/outlet_stock) + movement ledger; nilai qty pada visit_product_cards = snapshot kejadian visit.
+
+PAYMENT INVARIANT: amount_paid + receivable_amount = amount_due (per kartu; dan total_amount = amount_paid + receivable_amount pada header transaksi). Untuk transaksi wajib LUNAS: amount_paid = amount_due, receivable = 0.
+
+BUCKET STORAGE: visit-photos (FOTO_PRODUK & FOTO_AKHIR), visit-documents (struk/nota/kwitansi/invoice/SJ), outlet-photos (FOTO_DEPAN_OUTLET). Semua private, tenant-scoped (folder distributor_id/...).
+
+TIDAK ADA DELETE/DROP di domain bisnis; penonaktifan = status/ended_at; seluruh history append-only.
+"
