@@ -4,9 +4,10 @@ export default function AdminDistributionScreen() {
   return (
     <AdminModuleScreen
       title="Distribusi"
-      description="Susun struktur operasional: wilayah, rute, outlet, dan penugasan Sales Motoris."
+      description="Susun struktur operasional: rute, outlet, dan penugasan Sales Motoris."
       items={[
-        { title: "Wilayah", description: "Kelola wilayah dan rute, tugaskan outlet serta Sales Motoris.", icon: "map", route: "/admin/wilayah" },
+        { title: "Rute", description: "Kelola rute dan penugasan outlet/Sales.", icon: "shippingbox", route: "/admin/rute-list" },
+        { title: "Outlet", description: "Kelola data toko, pemilik, lokasi, dan foto.", icon: "building", route: "/admin/outlet" },
       ]}
     />
   );

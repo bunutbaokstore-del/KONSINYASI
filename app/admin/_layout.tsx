@@ -40,7 +40,9 @@ export default function AdminLayout() {
       <Tabs.Screen name="account" options={{ title: "Akun", tabBarIcon: ({ color }) => <IconSymbol size={22} name="person.fill" color={color} /> }} />
       <Tabs.Screen name="rute" options={{ href: null }} />
       <Tabs.Screen name="wilayah" options={{ href: null }} />
+      <Tabs.Screen name="outlet" options={{ href: null }} />
       <Tabs.Screen name="products" options={{ href: null }} />
+      <Tabs.Screen name="rute-list" options={{ href: null }} />
       </Tabs>
     </AdminRouteGuard>
   );

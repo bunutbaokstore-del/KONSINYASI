@@ -1,6 +1,6 @@
 Project KONSINYASI {
   database_type: "PostgreSQL"
-  Note: "DBML v1.4 - DESAIN ULANG PENUH (blueprint sebelum migration diterapkan). Mencakup WORKFLOW 1 (Serah Terima Muatan / Surat Jalan Gudang<->Sales), WORKFLOW 2 (Kunjungan Outlet: LUNAS & KONSINYASI), domain TRANSACTIONS & TRANSACTION_ITEMS (header + item untuk laporan, histori, dokumen, rekonsiliasi pembayaran, dan fondasi accounting), AUDIT REJECTED CHECK-IN (visit_checkin_attempts), serta konvensi infrastruktur (RLS, idempotency, anti negative stock, race safety). v1.4 menyelesaikan gap hasil FINAL TECHNICAL AUDIT: F1 (satu active visit per Sales) & F4 (audit rejected check-in). Status: READY FOR REVIEW -- BUKAN READY FOR MIGRATION."
+  Note: "DBML v1.5 - DESAIN ULANG PENUH (blueprint sebelum migration diterapkan). Mencakup WORKFLOW 1 (Serah Terima Muatan / Surat Jalan Gudang<->Sales), WORKFLOW 2 (Kunjungan Outlet: LUNAS & KONSINYASI), domain TRANSACTIONS & TRANSACTION_ITEMS (header + item untuk laporan, histori, dokumen, rekonsiliasi pembayaran, dan fondasi accounting), AUDIT REJECTED CHECK-IN (visit_checkin_attempts), domain GEO GLOBAL (provinsi -> kabupaten_kota -> desa -> wilayah_desa -> wilayah, DESAIN B: tanpa provinsi_id/kabupaten_kota_id di wilayah), serta konvensi infrastruktur (RLS, idempotency, anti negative stock, race safety). v1.5 menambahkan master geografis global dan junction wilayah_desa dari hasil FINAL GEO CONSISTENCY & TENANT INTEGRITY AUDIT (verdict: APPROVED WITH REQUIRED FIXES). Status: READY FOR REVIEW -- BUKAN READY FOR MIGRATION."
 }
 
 // =====================================================================
@@ -165,6 +165,12 @@ Enum sj_event_type {
   SJ_CANCELLED
 }
 
+// tipe administratif kabupaten/kota (master geografis BPS)
+Enum kabupaten_kota_tipe {
+  KABUPATEN
+  KOTA
+}
+
 // =====================================================================
 // 1. ORGANISASI / USER / ROLE
 // =====================================================================
@@ -196,7 +202,74 @@ Table users {
 }
 
 // =====================================================================
-// 2. WILAYAH / RUTE
+// 2. GEO MASTER (GLOBAL) & WILAYAH_DESA
+// =====================================================================
+// Master geografis bersifat GLOBAL (BPS): TIDAK memiliki distributor_id.
+// Struktur: provinsi -> kabupaten_kota -> desa -> wilayah_desa -> wilayah.
+// Tidak ada kecamatan. Soft-delete via is_active. kode_bps = VARCHAR (bukan integer).
+Table provinsi {
+  id uuid [pk]
+  kode_bps varchar(2) [not null, unique]
+  nama varchar(120) [not null]
+  ibukota varchar(120)
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table kabupaten_kota {
+  id uuid [pk]
+  provinsi_id uuid [not null, ref: > provinsi.id]
+  kode_bps varchar(4) [not null, unique]
+  nama varchar(120) [not null]
+  tipe kabupaten_kota_tipe [not null]
+  ibukota varchar(120)
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (provinsi_id, is_active)
+  }
+}
+
+Table desa {
+  id uuid [pk]
+  kabupaten_kota_id uuid [not null, ref: > kabupaten_kota.id]
+  kode_bps varchar(10) [not null, unique]
+  nama varchar(120) [not null]
+  kode_pos varchar(10)
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (kabupaten_kota_id, is_active)
+  }
+}
+
+// JUNCTION tenanted: menghubungkan Wilayah (tenant) dengan Desa (global).
+// Business rule: satu Desa hanya boleh berada pada SATU Wilayah dalam SATU Distributor.
+Table wilayah_desa {
+  id uuid [pk]
+  distributor_id uuid [not null, ref: > distributors.id]
+  wilayah_id uuid [not null]
+  desa_id uuid [not null, ref: > desa.id]
+  assigned_at timestamptz [not null, default: `now()`]
+  assigned_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (distributor_id, desa_id) [unique]  // 1 Desa = maksimal 1 Wilayah per Distributor
+    (wilayah_id, desa_id) [unique]      // defense-in-depth
+    (distributor_id, wilayah_id)
+  }
+
+  Note: "COMPOSITE FK SQL-ONLY (wajib di migration; DBML tidak mendukung composite FK): FOREIGN KEY (distributor_id, wilayah_id) REFERENCES wilayah (distributor_id, id) ON DELETE RESTRICT. Tanpa cross-tenant: wilayah_id wajib berada di distributor_id yang sama. FN SIMPLE (di migration): desa_id REFERENCES desa(id) RESTRICT; distributor_id REFERENCES distributors(id) RESTRICT; assigned_by REFERENCES users(id) RESTRICT"
+}
+
+// =====================================================================
+// 3. WILAYAH / RUTE
 // =====================================================================
 Table wilayah {
   id uuid [pk]
@@ -212,7 +285,10 @@ Table wilayah {
   indexes {
     (distributor_id, kode) [unique]
     (distributor_id, is_active)
+    (distributor_id, id) [unique]  // target composite FK dari wilayah_desa
   }
+
+  Note: "UNIQUE (distributor_id, id) TIDAK redundan: fungsinya sebagai TARGET composite FK (wilayah_desa.distributor_id, wilayah_desa.wilayah_id) -> wilayah (distributor_id, id). Idempotent untuk data existing: id adalah PK (gen_random_uuid), sehingga (distributor_id, id) selalu unik pada baris mana pun"
 }
 
 Table rute {
@@ -234,7 +310,7 @@ Table rute {
 }
 
 // =====================================================================
-// 3. OUTLET (lifecycle terpisah dari condition pada product card)
+// 4. OUTLET (lifecycle terpisah dari condition pada product card)
 // =====================================================================
 Table outlets {
   id uuid [pk]
@@ -262,7 +338,7 @@ Table outlets {
 }
 
 // =====================================================================
-// 4. ASSIGNMENT (Admin menentukan Sales & Outlet melalui Rute)
+// 5. ASSIGNMENT (Admin menentukan Sales & Outlet melalui Rute)
 // =====================================================================
 Table rute_outlet_assignments {
   id uuid [pk]
@@ -322,7 +398,7 @@ Table assignment_history {
 }
 
 // =====================================================================
-// 5. PRODUK (master; kartu produk = referensi + snapshot)
+// 6. PRODUK (master; kartu produk = referensi + snapshot)
 // =====================================================================
 Table products {
   id uuid [pk]
@@ -345,7 +421,7 @@ Table products {
 }
 
 // =====================================================================
-// 6. STOK GUDANG (DISTRIBUTOR)
+// 7. STOK GUDANG (DISTRIBUTOR)
 // GUDANG HANYA BERUBAH MELALUI SURAT JALAN YANG SUDAH COMPLETED.
 // =====================================================================
 Table distributor_stock {
@@ -363,7 +439,7 @@ Table distributor_stock {
 }
 
 // =====================================================================
-// 7. SALES STOCK (MUATAN SALES)
+// 8. SALES STOCK (MUATAN SALES)
 // Hasil final accepted quantity SJ GUDANG -> SALES. Sumber stok untuk kunjungan.
 // =====================================================================
 Table sales_stock {
@@ -383,7 +459,7 @@ Table sales_stock {
 }
 
 // =====================================================================
-// 8. STOK OUTLET (ownership)
+// 9. STOK OUTLET (ownership)
 // =====================================================================
 Table outlet_stock {
   id uuid [pk]
@@ -403,7 +479,7 @@ Table outlet_stock {
 }
 
 // =====================================================================
-// 9. SURAT JALAN (WORKFLOW 1 - SERAH TERIMA MUATAN)
+// 10. SURAT JALAN (WORKFLOW 1 - SERAH TERIMA MUATAN)
 // =====================================================================
 Table surat_jalan {
   id uuid [pk]
@@ -458,7 +534,7 @@ Table surat_jalan_items {
 }
 
 // =====================================================================
-// 10. STOCK MOVEMENT SURAT JALAN (ledger idempoten - anti double transfer SJ)
+// 11. STOCK MOVEMENT SURAT JALAN (ledger idempoten - anti double transfer SJ)
 // =====================================================================
 Table surat_jalan_stock_movements {
   id uuid [pk]
@@ -484,7 +560,7 @@ Table surat_jalan_stock_movements {
 }
 
 // =====================================================================
-// 11. AUDIT SURAT JALAN
+// 12. AUDIT SURAT JALAN
 // =====================================================================
 Table surat_jalan_events {
   id uuid [pk]
@@ -502,7 +578,7 @@ Table surat_jalan_events {
 }
 
 // =====================================================================
-// 12. KUNJUNGAN OUTLET (WORKFLOW 2)
+// 13. KUNJUNGAN OUTLET (WORKFLOW 2)
 // =====================================================================
 Table visits {
   id uuid [pk]
@@ -565,7 +641,7 @@ Table visit_checkin_attempts {
 }
 
 // =====================================================================
-// 13. KARTU PRODUK (SATU VISIT -> BANYAK CARD; TIAP CARD KONDISI SENDIRI)
+// 14. KARTU PRODUK (SATU VISIT -> BANYAK CARD; TIAP CARD KONDISI SENDIRI)
 // =====================================================================
 Table visit_product_cards {
   id uuid [pk]
@@ -607,7 +683,7 @@ Table visit_product_cards {
 }
 
 // =====================================================================
-// 14. FOTO & DOKUMEN (storage bucket: visit-photos, visit-documents, outlet-photos)
+// 15. FOTO & DOKUMEN (storage bucket: visit-photos, visit-documents, outlet-photos)
 // =====================================================================
 Table visit_photos {
   id uuid [pk]
@@ -647,7 +723,7 @@ Table visit_documents {
 }
 
 // =====================================================================
-// 15. PEMBAYARAN & PIUTANG
+// 16. PEMBAYARAN & PIUTANG
 // =====================================================================
 Table visit_payments {
   id uuid [pk]
@@ -691,7 +767,7 @@ due_date date  // nullable; TIDAK hardcoded (30 hari belum ditetapkan sebagai bu
 }
 
 // =====================================================================
-// 16. TRANSACTIONS & TRANSACTION ITEMS (HEADER/ITEM - LAPORAN & HISTORI)
+// 17. TRANSACTIONS & TRANSACTION ITEMS (HEADER/ITEM - LAPORAN & HISTORI)
 // =====================================================================
 Table transactions {
   id uuid [pk]
@@ -744,7 +820,7 @@ Table transaction_items {
 }
 
 // =====================================================================
-// 17. STOCK MOVEMENT KUNJUNGAN (ledger idempoten - anti double, domain visit)
+// 18. STOCK MOVEMENT KUNJUNGAN (ledger idempoten - anti double, domain visit)
 // =====================================================================
 Table visit_stock_movements {
   id uuid [pk]
@@ -771,7 +847,7 @@ Table visit_stock_movements {
 }
 
 // =====================================================================
-// 18. AUDIT KUNJUNGAN
+// 19. AUDIT KUNJUNGAN
 // =====================================================================
 Table visit_events {
   id uuid [pk]

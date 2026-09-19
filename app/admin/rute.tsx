@@ -32,6 +32,7 @@ export default function AdminRuteScreen() {
 
   const [picker, setPicker] = useState<PickerState>(null);
   const [search, setSearch] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const ruteQuery = trpc.distribution.getRute.useQuery({ ruteId }, { enabled: isAuthenticated && Boolean(ruteId) });
   const historyQuery = trpc.distribution.getAssignmentHistory.useQuery({ ruteId }, { enabled: isAuthenticated && Boolean(ruteId) });
@@ -53,10 +54,16 @@ export default function AdminRuteScreen() {
   const pickerTitle = picker?.type === "outlet-add" ? "Tambah Outlet" : picker?.type === "outlet-move" ? `Pindah ${picker.outlet.nama}` : picker?.type === "sales-add" ? "Tambah Sales" : picker?.type === "sales-move" ? `Pindah ${picker.sales.nama}` : "";
   const movingError = picker?.type === "outlet-add" ? assignOutletMutation.error?.message : picker?.type === "outlet-move" ? reassignOutletMutation.error?.message : picker?.type === "sales-add" ? assignSalesMutation.error?.message : picker?.type === "sales-move" ? reassignSalesMutation.error?.message : null;
 
+  const pickerLoading = picker?.type === "outlet-add" ? outletQuery.isLoading : picker?.type === "outlet-move" ? ruteOptionsQuery.isLoading : picker?.type === "sales-add" ? salesQuery.isLoading : picker?.type === "sales-move" ? ruteOptionsQuery.isLoading : false;
+  const pickerError = picker?.type === "outlet-add" ? outletQuery.error?.message ?? null : picker?.type === "outlet-move" ? ruteOptionsQuery.error?.message ?? null : picker?.type === "sales-add" ? salesQuery.error?.message ?? null : picker?.type === "sales-move" ? ruteOptionsQuery.error?.message ?? null : null;
+  const outletEmpty = (outletQuery.data ?? []).length === 0;
+  const salesEmpty = (salesQuery.data ?? []).length === 0;
+  const pickerEmptyMessage = picker?.type === "outlet-add" ? (outletEmpty ? "Belum ada outlet yang dapat ditambahkan." : "Tidak ada outlet yang cocok.") : picker?.type === "outlet-move" ? "Tidak ada rute lain yang tersedia." : picker?.type === "sales-add" ? (salesEmpty ? "Belum ada sales yang tersedia." : "Tidak ada sales yang cocok.") : picker?.type === "sales-move" ? "Tidak ada rute lain yang tersedia." : "Tidak ada pilihan yang cocok.";
+
   let options: { id: string; label: string; sublabel: string; disabled?: boolean }[] = [];
   if (picker?.type === "outlet-add") {
     options = (outletQuery.data ?? [])
-      .filter((outlet) => outlet.activeRuteId !== ruteId && outlet.isActive)
+      .filter((outlet) => outlet.activeRuteId !== ruteId && outlet.status === "ACTIVE")
       .map((outlet) => ({ id: outlet.id, label: outlet.nama, sublabel: `${outlet.kode} · ${outlet.alamatSingkat}${outlet.activeRuteNama ? ` · di ${outlet.activeRuteNama}` : ""}` }));
   } else if (picker?.type === "outlet-move") {
     options = (ruteOptionsQuery.data ?? [])
@@ -75,7 +82,7 @@ export default function AdminRuteScreen() {
   const pickOption = (id: string) => {
     if (!picker || !rute) return;
     if (picker.type === "outlet-add") {
-      assignOutletMutation.mutate({ outletId: id, ruteId }, { onSuccess: () => { setPicker(null); setSearch(""); invalidateAll(); } });
+      assignOutletMutation.mutate({ outletId: id, ruteId }, { onSuccess: () => { setPicker(null); setSearch(""); invalidateAll(); setSuccessMessage(`${options.find((o) => o.id === id)?.label ?? "Outlet"} ditambahkan ke rute.`); setTimeout(() => setSuccessMessage(""), 3500); } });
     } else if (picker.type === "outlet-move") {
       reassignOutletMutation.mutate({ outletId: picker.outlet.id, ruteId: id }, { onSuccess: () => { setPicker(null); setSearch(""); invalidateAll(); } });
     } else if (picker.type === "sales-add") {
@@ -146,18 +153,49 @@ export default function AdminRuteScreen() {
                   </View>
                   <TextInput value={search} onChangeText={setSearch} placeholder="Cari..." placeholderTextColor={colors.muted} returnKeyType="search" style={[styles.searchInput, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} />
                   {movingError ? <Text style={[styles.formError, { color: colors.error }]}>{movingError}</Text> : null}
-                  {options.map((option) => (
-                    <Pressable key={option.id} accessibilityRole="button" disabled={option.disabled} onPress={() => pickOption(option.id)} style={({ pressed }) => [styles.optionRow, { borderColor: colors.border }, pressed && styles.pressed, option.disabled && styles.disabled]}>
-                      <View style={[styles.optionIcon, { backgroundColor: `${colors.primary}14` }]}><AppIcon name="chevron-right" size={14} color={colors.primary} /></View>
-                      <View style={styles.optionCopy}>
-                        <Text style={[styles.optionLabel, { color: colors.foreground }]}>{option.label}</Text>
-                        <Text style={[styles.optionSublabel, { color: colors.muted }]} numberOfLines={2}>{option.sublabel}</Text>
-                      </View>
-                    </Pressable>
-                  ))}
-                  {options.length === 0 ? (
-                    <Text style={[styles.sectionSubtitle, { color: colors.muted }]}>Tidak ada pilihan yang cocok.</Text>
-                  ) : null}
+                  {pickerLoading ? (
+                    <View style={styles.pickerLoading}>
+                      <ActivityIndicator color={colors.primary} />
+                      <Text style={[styles.pickerLoadingText, { color: colors.muted }]}>{picker?.type === "outlet-add" || picker?.type === "outlet-move" ? "Memuat daftar outlet..." : "Memuat daftar sales..."}</Text>
+                    </View>
+                  ) : pickerError ? (
+                    <View>
+                      <Text style={[styles.formError, { color: colors.error }]}>{pickerError}</Text>
+                      <Pressable accessibilityRole="button" onPress={() => { if (picker?.type === "outlet-add") void outletQuery.refetch(); else if (picker?.type === "sales-add") void salesQuery.refetch(); else void ruteOptionsQuery.refetch(); }} style={({ pressed }) => [styles.outlineButton, { borderColor: colors.primary, alignSelf: "center" }, pressed && styles.pressed]}>
+                        <Text style={[styles.outlineButtonText, { color: colors.primary }]}>Coba Lagi</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View>
+                      {options.map((option) => (
+                        <Pressable key={option.id} accessibilityRole="button" disabled={option.disabled} onPress={() => pickOption(option.id)} style={({ pressed }) => [styles.optionRow, { borderColor: colors.border }, pressed && styles.pressed, option.disabled && styles.disabled]}>
+                          <View style={[styles.optionIcon, { backgroundColor: `${colors.primary}14` }]}><AppIcon name="chevron-right" size={14} color={colors.primary} /></View>
+                          <View style={styles.optionCopy}>
+                            <Text style={[styles.optionLabel, { color: colors.foreground }]}>{option.label}</Text>
+                            <Text style={[styles.optionSublabel, { color: colors.muted }]} numberOfLines={2}>{option.sublabel}</Text>
+                          </View>
+                        </Pressable>
+                      ))}
+                      {options.length === 0 ? (
+                        <View style={styles.pickerEmpty}>
+                          <AppIcon name={picker?.type === "outlet-add" || picker?.type === "outlet-move" ? "building" : "person"} size={22} color={colors.muted} />
+                          <Text style={[styles.pickerEmptyText, { color: colors.muted }]}>{pickerEmptyMessage}</Text>
+                          {picker?.type === "outlet-add" && outletEmpty ? (
+                            <Pressable accessibilityRole="button" onPress={() => { setPicker(null); setSearch(""); router.push("/admin/outlet"); }} style={({ pressed }) => [styles.outlineButton, { borderColor: colors.primary, alignSelf: "center" }, pressed && styles.pressed]}>
+                              <Text style={[styles.outlineButtonText, { color: colors.primary }]}>Kelola Outlet</Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
+              {successMessage ? (
+                <View style={[styles.successBanner, { backgroundColor: `${colors.success}14`, borderColor: colors.success }]}>
+                  <AppIcon name="verified" size={16} color={colors.success} />
+                  <Text style={[styles.successText, { color: colors.success }]}>{successMessage}</Text>
                 </View>
               ) : null}
 
@@ -283,6 +321,12 @@ const styles = StyleSheet.create({
   iconButton: { width: 36, height: 36, borderWidth: 1, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   searchInput: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 13, paddingVertical: 10, fontSize: 13, marginTop: 12 },
   formError: { fontSize: 12, marginTop: 8 },
+  pickerLoading: { minHeight: 96, alignItems: "center", justifyContent: "center", marginTop: 12 },
+  pickerLoadingText: { fontSize: 12, marginTop: 8 },
+  successBanner: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 16 },
+  successText: { fontSize: 12, fontWeight: "700", flex: 1 },
+  pickerEmpty: { minHeight: 120, alignItems: "center", justifyContent: "center", paddingHorizontal: 10, marginTop: 8 },
+  pickerEmptyText: { fontSize: 12, lineHeight: 18, marginTop: 8, textAlign: "center" },
   optionRow: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 14, padding: 11, marginTop: 9 },
   optionIcon: { width: 26, height: 26, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   optionCopy: { flex: 1, marginLeft: 10 },

@@ -9,7 +9,7 @@ export default function AdminFieldScreen() {
         { title: "Monitor Absensi", description: "Monitor absensi belum memiliki backend.", icon: "person" },
         { title: "Aktivitas", description: "Feed aktivitas lapangan belum tersedia.", icon: "notifications" },
         { title: "Transaksi", description: "Transaksi lapangan belum memiliki backend.", icon: "cart" },
-        { title: "Jaringan Toko", description: "Jaringan toko belum tersedia.", icon: "group" },
+        { title: "Jaringan Toko", description: "Kelola jaringan dan master outlet.", icon: "group", route: "/admin/outlet" },
       ]}
     />
   );

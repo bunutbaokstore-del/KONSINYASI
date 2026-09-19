@@ -52,6 +52,8 @@ export default function AdminWilayahScreen() {
           initial={{ kode: "", nama: "", keterangan: "" }}
           onBack={() => setView("list")}
           onSubmit={(input) => createMutation.mutate(input)}
+          mutationError={createMutation.error?.message ?? null}
+          isSubmitting={createMutation.isPending}
         />
       </AdminRouteGuard>
     );
@@ -167,9 +169,11 @@ type WilayahFormScreenProps = {
   initial: WilayahFormValues;
   onBack: () => void;
   onSubmit: (input: { kode: string; nama: string; keterangan?: string | null }) => void;
+  mutationError?: string | null;
+  isSubmitting?: boolean;
 };
 
-function WilayahFormScreen({ mode, initial, onBack, onSubmit }: WilayahFormScreenProps) {
+function WilayahFormScreen({ mode, initial, onBack, onSubmit, mutationError, isSubmitting }: WilayahFormScreenProps) {
   const colors = useColors();
   const [kode, setKode] = useState(initial.kode);
   const [nama, setNama] = useState(initial.nama);
@@ -177,6 +181,7 @@ function WilayahFormScreen({ mode, initial, onBack, onSubmit }: WilayahFormScree
   const [error, setError] = useState<string | null>(null);
 
   const submit = () => {
+    if (isSubmitting) return;
     const kodeTrim = kode.trim();
     const namaTrim = nama.trim();
     const keteranganTrim = keterangan.trim();
@@ -187,6 +192,8 @@ function WilayahFormScreen({ mode, initial, onBack, onSubmit }: WilayahFormScree
     setError(null);
     onSubmit({ kode: kodeTrim, nama: namaTrim, keterangan: keteranganTrim || null });
   };
+
+  const displayError = error ?? mutationError ?? null;
 
   return (
     <ScreenContainer edges={["top", "bottom", "left", "right"]} className="px-5">
@@ -204,17 +211,17 @@ function WilayahFormScreen({ mode, initial, onBack, onSubmit }: WilayahFormScree
           <Text style={[styles.subtitle, { color: colors.muted }]}>Kode wilayah harus unik dalam workspace ini.</Text>
           <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.fieldLabel, { color: colors.muted }]}>KODE</Text>
-            <TextInput value={kode} onChangeText={setKode} placeholder="contoh: JKT-01" placeholderTextColor={colors.muted} autoCapitalize="characters" style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} />
+            <TextInput value={kode} onChangeText={setKode} placeholder="contoh: JKT-01" placeholderTextColor={colors.muted} autoCapitalize="characters" style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} editable={!isSubmitting} />
             <Text style={[styles.fieldLabel, { color: colors.muted }]}>NAMA</Text>
-            <TextInput value={nama} onChangeText={setNama} placeholder="contoh: Jakarta Barat" placeholderTextColor={colors.muted} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} />
+            <TextInput value={nama} onChangeText={setNama} placeholder="contoh: Jakarta Barat" placeholderTextColor={colors.muted} style={[styles.input, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} editable={!isSubmitting} />
             <Text style={[styles.fieldLabel, { color: colors.muted }]}>KETERANGAN (OPSIONAL)</Text>
-            <TextInput value={keterangan} onChangeText={setKeterangan} placeholder="Catatan singkat tentang wilayah ini" placeholderTextColor={colors.muted} multiline style={[styles.input, styles.textarea, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} />
-            {error ? <Text style={[styles.formError, { color: colors.error }]}>{error}</Text> : null}
-            <Pressable accessibilityRole="button" onPress={submit} style={({ pressed }) => [styles.addButton, { backgroundColor: colors.primary, marginTop: 18 }, pressed && styles.pressed]}>
-              <Text style={styles.addButtonText}>{mode === "create" ? "Simpan Wilayah" : "Simpan Perubahan"}</Text>
+            <TextInput value={keterangan} onChangeText={setKeterangan} placeholder="Catatan singkat tentang wilayah ini" placeholderTextColor={colors.muted} multiline style={[styles.input, styles.textarea, { color: colors.foreground, backgroundColor: colors.background, borderColor: colors.border }]} editable={!isSubmitting} />
+            {displayError ? <Text style={[styles.formError, { color: colors.error }]}>{displayError}</Text> : null}
+            <Pressable accessibilityRole="button" onPress={submit} style={({ pressed }) => [styles.addButton, { backgroundColor: isSubmitting ? colors.muted : colors.primary, marginTop: 18 }, pressed && styles.pressed]}>
+              <Text style={styles.addButtonText}>{isSubmitting ? "Menyimpan..." : mode === "create" ? "Simpan Wilayah" : "Simpan Perubahan"}</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={onBack} style={({ pressed }) => [styles.outlineButton, { borderColor: colors.border, alignSelf: "center" }, pressed && styles.pressed]}>
-              <Text style={[styles.outlineButtonText, { color: colors.muted }]}>Batal</Text>
+            <Pressable accessibilityRole="button" onPress={isSubmitting ? undefined : onBack} style={({ pressed }) => [styles.outlineButton, { borderColor: colors.border, alignSelf: "center" }, pressed && styles.pressed, isSubmitting && styles.disabled]}>
+              <Text style={[styles.outlineButtonText, { color: isSubmitting ? colors.muted : colors.muted }]}>Batal</Text>
             </Pressable>
           </View>
         </View>
@@ -464,6 +471,7 @@ const styles = StyleSheet.create({
   outlineButtonText: { fontSize: 12, fontWeight: "800" },
   iconButton: { width: 38, height: 38, borderWidth: 1, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   pressed: { opacity: 0.75, transform: [{ scale: 0.99 }] },
+  disabled: { opacity: 0.5 },
   detailCard: { borderWidth: 1, borderRadius: 20, padding: 18, marginTop: 20 },
   detailHeaderRow: { flexDirection: "row", alignItems: "center" },
   detailIcon: { width: 50, height: 50, borderRadius: 16, alignItems: "center", justifyContent: "center" },

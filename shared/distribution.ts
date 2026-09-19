@@ -57,23 +57,118 @@ export type WilayahDetail = {
   rutes: WilayahDetailRute[];
 };
 
+export type OutletStatus = "ACTIVE" | "INACTIVE";
+
+export type DayOfWeek = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+
+export type ProvinsiRecord = {
+  id: string;
+  nama: string;
+};
+
+export type KabupatenKotaRecord = {
+  id: string;
+  provinsiId: string;
+  nama: string;
+};
+
+export type KecamatanRecord = {
+  id: string;
+  kabupatenKotaId: string;
+  kodeBps: string | null;
+  nama: string;
+  isActive: boolean;
+};
+
+export type DesaRecord = {
+  id: string;
+  kecamatanId: string;
+  kabupatenKotaId: string;
+  nama: string;
+  isActive: boolean;
+};
+
+export type ListKabupatenKotaInput = {
+  provinsiId?: string | null;
+};
+
+export type ListKecamatanInput = {
+  kabupatenKotaId: string;
+};
+
+export type ListDesaInput = {
+  kecamatanId: string;
+};
+
+export type OutletVisitScheduleRecord = {
+  id: string;
+  distributorId: string;
+  outletId: string;
+  dayOfWeek: DayOfWeek;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type OutletRecord = {
   id: string;
   kode: string;
   nama: string;
-  alamat: string;
+  namaPemilik: string | null;
+  noHp: string | null;
+  alamat: string | null;
   alamatSingkat: string;
-  isActive: boolean;
+  latitude: number | null;
+  longitude: number | null;
+  fotoDepanUrl: string | null;
+  status: OutletStatus;
   createdAt: string;
   updatedAt: string;
   activeRuteId: string | null;
   activeRuteNama: string | null;
+  visitDays: DayOfWeek[];
+  desaId: string | null;
+  desaNama: string | null;
+  kecamatanId: string | null;
+  kecamatanNama: string | null;
+  kabupatenKotaId: string | null;
+  kabupatenKotaNama: string | null;
+  provinsiId: string | null;
+  provinsiNama: string | null;
+  desaInfo?: {
+    desaId: string;
+    desaNama: string;
+    kecamatanId: string;
+    kecamatanNama: string;
+    kabupatenKotaId: string;
+    kabupatenKotaNama: string;
+    provinsiId: string;
+    provinsiNama: string;
+  };
 };
 
 export type OutletInput = {
-  kode: string;
   nama: string;
-  alamat: string;
+  namaPemilik?: string | null;
+  noHp?: string | null;
+  alamat?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  fotoDepanUrl?: string | null;
+  desaId?: string | null;
+};
+
+export type OutletFormValue = {
+  nama: string;
+  namaPemilik: string | null;
+  noHp: string | null;
+  alamat: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  fotoDepanUrl: string | null;
+  visitDays: DayOfWeek[];
+  desaId: string | null;
+  kecamatanId: string | null;
+  kabupatenKotaId: string | null;
 };
 
 export type SalesRecord = {
