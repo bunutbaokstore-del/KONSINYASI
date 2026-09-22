@@ -606,6 +606,339 @@ export const appRouter = router({
           status: user.banned_until ? "disabled" : "active",
         }));
     }),
+    geography: router({
+      createProvinsi: sysAdminProcedure
+        .input(z.object({
+          nama: z.string().trim().min(1, "Nama provinsi wajib diisi.").max(120, "Nama provinsi maksimal 120 karakter."),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { data, error } = await adminClient.rpc("create_provinsi", {
+            p_nama: input.nama,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "22001") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Provinsi belum dapat dibuat." });
+          }
+          return data;
+        }),
+
+      createKabupatenKota: sysAdminProcedure
+        .input(z.object({
+          provinsiId: z.string().uuid("Provinsi ID tidak valid."),
+          nama: z.string().trim().min(1, "Nama Kabupaten/Kota wajib diisi.").max(120, "Nama Kabupaten/Kota maksimal 120 karakter."),
+          tipe: z.enum(["KABUPATEN", "KOTA"]),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { data, error } = await adminClient.rpc("create_kabupaten_kota", {
+            p_provinsi_id: input.provinsiId,
+            p_nama: input.nama,
+            p_tipe: input.tipe,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            if (error.code === "22001") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Kabupaten/Kota belum dapat dibuat." });
+          }
+          return data;
+        }),
+
+      createKecamatan: sysAdminProcedure
+        .input(z.object({
+          kabupatenKotaId: z.string().uuid("Kabupaten/Kota ID tidak valid."),
+          nama: z.string().trim().min(1, "Nama Kecamatan wajib diisi.").max(120, "Nama Kecamatan maksimal 120 karakter."),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { data, error } = await adminClient.rpc("create_kecamatan", {
+            p_kabupaten_kota_id: input.kabupatenKotaId,
+            p_nama: input.nama,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            if (error.code === "22001") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Kecamatan belum dapat dibuat." });
+          }
+          return data;
+        }),
+
+      createDesa: sysAdminProcedure
+        .input(z.object({
+          kabupatenKotaId: z.string().uuid("Kabupaten/Kota ID tidak valid."),
+          kecamatanId: z.string().uuid("Kecamatan ID tidak valid."),
+          nama: z.string().trim().min(1, "Nama Desa/Kelurahan wajib diisi.").max(120, "Nama Desa/Kelurahan maksimal 120 karakter."),
+          kodePos: z.string().trim().max(10, "Kode pos maksimal 10 karakter.").nullable().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { data, error } = await adminClient.rpc("create_desa", {
+            p_kabupaten_kota_id: input.kabupatenKotaId,
+            p_kecamatan_id: input.kecamatanId,
+            p_nama: input.nama,
+            p_kode_pos: input.kodePos ?? null,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            if (error.code === "22003") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            if (error.code === "22001") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Desa/Kelurahan belum dapat dibuat." });
+          }
+          return data;
+        }),
+
+      updateProvinsi: sysAdminProcedure
+        .input(z.object({
+          id: z.string().uuid("Provinsi ID tidak valid."),
+          nama: z.string().trim().min(1, "Nama provinsi wajib diisi.").max(120, "Nama provinsi maksimal 120 karakter."),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { data, error } = await adminClient.rpc("update_provinsi", {
+            p_id: input.id,
+            p_nama: input.nama,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            if (error.code === "22001") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Provinsi belum dapat diperbarui." });
+          }
+          return data;
+        }),
+
+      updateKabupatenKota: sysAdminProcedure
+        .input(z.object({
+          id: z.string().uuid("Kabupaten/Kota ID tidak valid."),
+          nama: z.string().trim().min(1, "Nama Kabupaten/Kota wajib diisi.").max(120, "Nama Kabupaten/Kota maksimal 120 karakter."),
+          tipe: z.enum(["KABUPATEN", "KOTA"]),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { data, error } = await adminClient.rpc("update_kabupaten_kota", {
+            p_id: input.id,
+            p_nama: input.nama,
+            p_tipe: input.tipe,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            if (error.code === "22001") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Kabupaten/Kota belum dapat diperbarui." });
+          }
+          return data;
+        }),
+
+      updateKecamatan: sysAdminProcedure
+        .input(z.object({
+          id: z.string().uuid("Kecamatan ID tidak valid."),
+          nama: z.string().trim().min(1, "Nama Kecamatan wajib diisi.").max(120, "Nama Kecamatan maksimal 120 karakter."),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { data, error } = await adminClient.rpc("update_kecamatan", {
+            p_id: input.id,
+            p_nama: input.nama,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            if (error.code === "22001") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Kecamatan belum dapat diperbarui." });
+          }
+          return data;
+        }),
+
+      updateDesa: sysAdminProcedure
+        .input(z.object({
+          id: z.string().uuid("Desa/Kelurahan ID tidak valid."),
+          nama: z.string().trim().min(1, "Nama Desa/Kelurahan wajib diisi.").max(120, "Nama Desa/Kelurahan maksimal 120 karakter."),
+          kodePos: z.string().trim().max(10, "Kode pos maksimal 10 karakter.").nullable().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { data, error } = await adminClient.rpc("update_desa", {
+            p_id: input.id,
+            p_nama: input.nama,
+            p_kode_pos: input.kodePos ?? null,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            if (error.code === "22001") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Desa/Kelurahan belum dapat diperbarui." });
+          }
+          return data;
+        }),
+
+      setProvinsiActive: sysAdminProcedure
+        .input(z.object({
+          id: z.string().uuid("Provinsi ID tidak valid."),
+          isActive: z.boolean(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { data, error } = await adminClient.rpc("set_provinsi_active", {
+            p_id: input.id,
+            p_is_active: input.isActive,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Status provinsi belum dapat diubah." });
+          }
+          return data;
+        }),
+
+      setKabupatenKotaActive: sysAdminProcedure
+        .input(z.object({
+          id: z.string().uuid("Kabupaten/Kota ID tidak valid."),
+          isActive: z.boolean(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { data, error } = await adminClient.rpc("set_kabupaten_kota_active", {
+            p_id: input.id,
+            p_is_active: input.isActive,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Status Kabupaten/Kota belum dapat diubah." });
+          }
+          return data;
+        }),
+
+      setKecamatanActive: sysAdminProcedure
+        .input(z.object({
+          id: z.string().uuid("Kecamatan ID tidak valid."),
+          isActive: z.boolean(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { data, error } = await adminClient.rpc("set_kecamatan_active", {
+            p_id: input.id,
+            p_is_active: input.isActive,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Status Kecamatan belum dapat diubah." });
+          }
+          return data;
+        }),
+
+      setDesaActive: sysAdminProcedure
+        .input(z.object({
+          id: z.string().uuid("Desa/Kelurahan ID tidak valid."),
+          isActive: z.boolean(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { data, error } = await adminClient.rpc("set_desa_active", {
+            p_id: input.id,
+            p_is_active: input.isActive,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Status Desa/Kelurahan belum dapat diubah." });
+          }
+          return data;
+        }),
+
+      deleteProvinsi: sysAdminProcedure
+        .input(z.object({
+          id: z.string().uuid("Provinsi ID tidak valid."),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { error } = await adminClient.rpc("delete_provinsi", {
+            p_id: input.id,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            if (error.code === "22003") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Provinsi belum dapat dihapus." });
+          }
+          return { success: true };
+        }),
+
+      deleteKabupatenKota: sysAdminProcedure
+        .input(z.object({
+          id: z.string().uuid("Kabupaten/Kota ID tidak valid."),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { error } = await adminClient.rpc("delete_kabupaten_kota", {
+            p_id: input.id,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            if (error.code === "22003") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Kabupaten/Kota belum dapat dihapus." });
+          }
+          return { success: true };
+        }),
+
+      deleteKecamatan: sysAdminProcedure
+        .input(z.object({
+          id: z.string().uuid("Kecamatan ID tidak valid."),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { error } = await adminClient.rpc("delete_kecamatan", {
+            p_id: input.id,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            if (error.code === "22003") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Kecamatan belum dapat dihapus." });
+          }
+          return { success: true };
+        }),
+
+      deleteDesa: sysAdminProcedure
+        .input(z.object({
+          id: z.string().uuid("Desa/Kelurahan ID tidak valid."),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const adminClient = getSupabaseAdminClient();
+          const { error } = await adminClient.rpc("delete_desa", {
+            p_id: input.id,
+            p_actor_id: ctx.supabaseUser.id,
+          });
+          if (error) {
+            if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
+            if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
+            if (error.code === "22003") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Desa/Kelurahan belum dapat dihapus." });
+          }
+          return { success: true };
+        }),
+    }),
   }),
   registration: router({
     createDistributor: publicProcedure
@@ -1507,32 +1840,44 @@ export const appRouter = router({
       }),
   }),
   distribution: router({
-    listProvinsi: publicProcedure.query(async () => {
-      const adminClient = getSupabaseAdminClient();
-      const { data, error } = await adminClient.from("provinsi").select("id, nama").order("nama", { ascending: true });
-      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Daftar provinsi belum dapat dimuat." });
-      return (data ?? []).map((p) => ({ id: p.id, nama: p.nama }));
-    }),
-    listKabupatenKota: publicProcedure
-      .input(z.object({ provinsiId: z.string().uuid().nullable().optional() }).optional())
+    listProvinsi: publicProcedure
+      .input(z.object({ filter: z.enum(["active", "inactive", "all"]).optional() }).optional())
       .query(async ({ input }) => {
         const adminClient = getSupabaseAdminClient();
-        let query = adminClient.from("kabupaten_kota").select("id, provinsi_id, nama").order("nama", { ascending: true });
+        let query = adminClient.from("provinsi").select("id, nama, is_active").order("nama", { ascending: true });
+        const filter = input?.filter ?? "active";
+        if (filter === "active") query = query.eq("is_active", true);
+        else if (filter === "inactive") query = query.eq("is_active", false);
+        const { data, error } = await query;
+        if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Daftar provinsi belum dapat dimuat." });
+        return (data ?? []).map((p) => ({ id: p.id, nama: p.nama, isActive: p.is_active }));
+      }),
+    listKabupatenKota: publicProcedure
+      .input(z.object({ provinsiId: z.string().uuid().nullable().optional(), filter: z.enum(["active", "inactive", "all"]).optional() }).optional())
+      .query(async ({ input }) => {
+        const adminClient = getSupabaseAdminClient();
+        let query = adminClient.from("kabupaten_kota").select("id, provinsi_id, nama, is_active").order("nama", { ascending: true });
         if (input?.provinsiId) query = query.eq("provinsi_id", input.provinsiId);
+        const filter = input?.filter ?? "active";
+        if (filter === "active") query = query.eq("is_active", true);
+        else if (filter === "inactive") query = query.eq("is_active", false);
         const { data, error } = await query;
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Daftar kabupaten/kota belum dapat dimuat." });
-        return (data ?? []).map((k) => ({ id: k.id, provinsiId: k.provinsi_id, nama: k.nama }));
+        return (data ?? []).map((k) => ({ id: k.id, provinsiId: k.provinsi_id, nama: k.nama, isActive: k.is_active }));
       }),
     listKecamatan: publicProcedure
-      .input(z.object({ kabupatenKotaId: z.string().uuid() }))
+      .input(z.object({ kabupatenKotaId: z.string().uuid(), filter: z.enum(["active", "inactive", "all"]).optional() }))
       .query(async ({ input }) => {
         const adminClient = getSupabaseAdminClient();
-        const { data, error } = await adminClient
+        let query = adminClient
           .from("kecamatan")
           .select("id, kabupaten_kota_id, kode_bps, nama, is_active")
           .eq("kabupaten_kota_id", input.kabupatenKotaId)
-          .eq("is_active", true)
           .order("nama", { ascending: true });
+        const filter = input?.filter ?? "active";
+        if (filter === "active") query = query.eq("is_active", true);
+        else if (filter === "inactive") query = query.eq("is_active", false);
+        const { data, error } = await query;
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Daftar kecamatan belum dapat dimuat." });
         return (data ?? []).map((k) => ({
           id: k.id,
@@ -1543,15 +1888,18 @@ export const appRouter = router({
         }));
       }),
     listDesa: publicProcedure
-      .input(z.object({ kecamatanId: z.string().uuid() }))
+      .input(z.object({ kecamatanId: z.string().uuid(), filter: z.enum(["active", "inactive", "all"]).optional() }))
       .query(async ({ input }) => {
         const adminClient = getSupabaseAdminClient();
-        const { data, error } = await adminClient
+        let query = adminClient
           .from("desa")
           .select("id, kecamatan_id, kabupaten_kota_id, nama, is_active")
           .eq("kecamatan_id", input.kecamatanId)
-          .eq("is_active", true)
           .order("nama", { ascending: true });
+        const filter = input?.filter ?? "active";
+        if (filter === "active") query = query.eq("is_active", true);
+        else if (filter === "inactive") query = query.eq("is_active", false);
+        const { data, error } = await query;
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Daftar desa/kelurahan belum dapat dimuat." });
         return (data ?? []).map((d) => ({
           id: d.id,
