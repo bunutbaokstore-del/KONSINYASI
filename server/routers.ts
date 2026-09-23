@@ -504,6 +504,7 @@ type CreateOutletInput = {
   longitude?: number | null;
   fotoDepanUrl?: string | null;
   desaId?: string | null;
+  visitDays?: DayOfWeek[];
 };
 
 async function createOutletForTenant(args: { actorId: string; distributorId: string; input: CreateOutletInput }): Promise<OutletRecord> {
@@ -527,7 +528,24 @@ async function createOutletForTenant(args: { actorId: string; distributorId: str
     }).select(outletColumns).maybeSingle();
     if (error?.code === "23505") { conflict = true; continue; }
     if (error || !data) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Outlet belum dapat dibuat." });
-    return toOutletRecord(data, null, null);
+
+    // Persist visit schedule atomically via the deployed RPC when provided.
+    // NOTE: create flow has no surrounding transaction; a schedule-write failure
+    // after a successful outlet create yields a partial write (outlet exists,
+    // schedule missing). This mirrors the existing updateOutlet behavior.
+    let visitDays: DayOfWeek[] = [];
+    if (args.input.visitDays !== undefined) {
+      const { data: rpcData, error: rpcError } = await getSupabaseAdminClient().rpc("bulk_upsert_outlet_visit_schedule", {
+        p_outlet_id: data.id,
+        p_days: args.input.visitDays,
+        p_distributor_id: args.distributorId,
+        p_assigned_by: args.actorId,
+      });
+      if (rpcError) rpcFailure(rpcError);
+      const row = Array.isArray(rpcData) ? rpcData?.[0] : rpcData;
+      visitDays = Array.isArray(row?.days) ? (row.days as DayOfWeek[]) : (args.input.visitDays ?? []);
+    }
+    return toOutletRecord(data, null, null, visitDays);
   }
   if (conflict) throw new TRPCError({ code: "CONFLICT", message: "Kode Outlet sudah digunakan." });
   throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Outlet belum dapat dibuat." });
@@ -2376,6 +2394,7 @@ export const appRouter = router({
         latitude: z.number().min(-90).max(90).nullable().optional(),
         longitude: z.number().min(-180).max(180).nullable().optional(),
         desaId: z.string().uuid().nullable().optional(),
+        visitDays: z.array(z.enum(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"])).optional(),
       }),
     )(async ({ ctx, input }) => {
         const distributorId = getDistributorId(ctx.supabaseUser);
