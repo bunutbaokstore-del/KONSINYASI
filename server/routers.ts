@@ -2592,6 +2592,304 @@ export const appRouter = router({
 
         return { outletId: input.outletId, path: storagePath };
       }),
+    listKabupatenKotaCountByProvinsi: publicProcedure
+      .input(z.object({ provinsiId: z.string().uuid().optional(), filter: z.enum(["active", "inactive", "all"]).optional() }).optional())
+      .query(async ({ input }) => {
+        const adminClient = getSupabaseAdminClient();
+        const filter = input?.filter ?? "active";
+        const countForProvinsi = async (provinsiId: string): Promise<number> => {
+          let query = adminClient
+            .from("kabupaten_kota")
+            .select("id", { count: "exact", head: true })
+            .eq("provinsi_id", provinsiId);
+          if (filter === "active") query = query.eq("is_active", true);
+          else if (filter === "inactive") query = query.eq("is_active", false);
+          const { count, error } = await query;
+          if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Kabupaten/Kota belum dapat dimuat." });
+          return count ?? 0;
+        };
+        if (input?.provinsiId) {
+          return [{ provinsiId: input.provinsiId, count: await countForProvinsi(input.provinsiId) }];
+        }
+        const { data: provinsiRows, error: provinsiError } = await adminClient.from("provinsi").select("id");
+        if (provinsiError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Kabupaten/Kota belum dapat dimuat." });
+        const results: { provinsiId: string; count: number }[] = [];
+        for (const row of provinsiRows ?? []) {
+          results.push({ provinsiId: row.id, count: await countForProvinsi(row.id) });
+        }
+        return results;
+      }),
+    listKecamatanCountByKabupatenKota: publicProcedure
+      .input(z.object({ provinsiId: z.string().uuid(), filter: z.enum(["active", "inactive", "all"]).optional() }))
+      .query(async ({ input }) => {
+        const adminClient = getSupabaseAdminClient();
+        const filter = input?.filter ?? "active";
+        const { data: kabupatenRows, error: kabupatenError } = await adminClient
+          .from("kabupaten_kota")
+          .select("id")
+          .eq("provinsi_id", input.provinsiId);
+        if (kabupatenError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Kecamatan belum dapat dimuat." });
+        const results: { kabupatenKotaId: string; count: number }[] = [];
+        for (const kabupaten of kabupatenRows ?? []) {
+          let query = adminClient
+            .from("kecamatan")
+            .select("id", { count: "exact", head: true })
+            .eq("kabupaten_kota_id", kabupaten.id);
+          if (filter === "active") query = query.eq("is_active", true);
+          else if (filter === "inactive") query = query.eq("is_active", false);
+          const { count, error } = await query;
+          if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Kecamatan belum dapat dimuat." });
+          results.push({ kabupatenKotaId: kabupaten.id, count: count ?? 0 });
+        }
+        return results;
+      }),
+    listDesaCountByKecamatan: publicProcedure
+      .input(z.object({ kabupatenKotaId: z.string().uuid(), filter: z.enum(["active", "inactive", "all"]).optional() }))
+      .query(async ({ input }) => {
+        const adminClient = getSupabaseAdminClient();
+        const filter = input?.filter ?? "active";
+        const { data: kecamatanRows, error: kecamatanError } = await adminClient
+          .from("kecamatan")
+          .select("id")
+          .eq("kabupaten_kota_id", input.kabupatenKotaId);
+        if (kecamatanError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Desa/Kelurahan belum dapat dimuat." });
+        const results: { kecamatanId: string; count: number }[] = [];
+        for (const kecamatan of kecamatanRows ?? []) {
+          let query = adminClient
+            .from("desa")
+            .select("id", { count: "exact", head: true })
+            .eq("kecamatan_id", kecamatan.id);
+          if (filter === "active") query = query.eq("is_active", true);
+          else if (filter === "inactive") query = query.eq("is_active", false);
+          const { count, error } = await query;
+          if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Desa/Kelurahan belum dapat dimuat." });
+          results.push({ kecamatanId: kecamatan.id, count: count ?? 0 });
+        }
+        return results;
+      }),
+    listKecamatanCountByProvinsi: publicProcedure
+      .input(z.object({ provinsiId: z.string().uuid().optional(), filter: z.enum(["active", "inactive", "all"]).optional() }).optional())
+      .query(async ({ input }) => {
+        const adminClient = getSupabaseAdminClient();
+        const filter = input?.filter ?? "active";
+        const countForProvinsi = async (provinsiId: string): Promise<number> => {
+          const { data: kabupatenRows, error: kabupatenError } = await adminClient
+            .from("kabupaten_kota")
+            .select("id")
+            .eq("provinsi_id", provinsiId);
+          if (kabupatenError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Kecamatan belum dapat dimuat." });
+          if (!kabupatenRows || kabupatenRows.length === 0) return 0;
+          const kabupatenIds = kabupatenRows.map((k) => k.id);
+          let query = adminClient
+            .from("kecamatan")
+            .select("id", { count: "exact", head: true })
+            .in("kabupaten_kota_id", kabupatenIds);
+          if (filter === "active") query = query.eq("is_active", true);
+          else if (filter === "inactive") query = query.eq("is_active", false);
+          const { count, error } = await query;
+          if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Kecamatan belum dapat dimuat." });
+          return count ?? 0;
+        };
+        if (input?.provinsiId) {
+          return [{ provinsiId: input.provinsiId, count: await countForProvinsi(input.provinsiId) }];
+        }
+        const { data: provinsiRows, error: provinsiError } = await adminClient.from("provinsi").select("id");
+        if (provinsiError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Kecamatan belum dapat dimuat." });
+        const results: { provinsiId: string; count: number }[] = [];
+        for (const row of provinsiRows ?? []) {
+          results.push({ provinsiId: row.id, count: await countForProvinsi(row.id) });
+        }
+        return results;
+      }),
+    listDesaCountByKabupatenKota: publicProcedure
+      .input(z.object({ provinsiId: z.string().uuid(), filter: z.enum(["active", "inactive", "all"]).optional() }))
+      .query(async ({ input }) => {
+        const adminClient = getSupabaseAdminClient();
+        const filter = input?.filter ?? "active";
+        const { data: kabupatenRows, error: kabupatenError } = await adminClient
+          .from("kabupaten_kota")
+          .select("id")
+          .eq("provinsi_id", input.provinsiId);
+        if (kabupatenError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Desa/Kelurahan belum dapat dimuat." });
+        const results: { kabupatenKotaId: string; count: number }[] = [];
+        for (const kabupaten of kabupatenRows ?? []) {
+          let query = adminClient
+            .from("desa")
+            .select("id", { count: "exact", head: true })
+            .eq("kabupaten_kota_id", kabupaten.id);
+          if (filter === "active") query = query.eq("is_active", true);
+          else if (filter === "inactive") query = query.eq("is_active", false);
+          const { count, error } = await query;
+          if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Desa/Kelurahan belum dapat dimuat." });
+          results.push({ kabupatenKotaId: kabupaten.id, count: count ?? 0 });
+        }
+        return results;
+      }),
+    listDesaCountByProvinsi: publicProcedure
+      .input(z.object({ provinsiId: z.string().uuid().optional(), filter: z.enum(["active", "inactive", "all"]).optional() }).optional())
+      .query(async ({ input }) => {
+        const adminClient = getSupabaseAdminClient();
+        const filter = input?.filter ?? "active";
+        const countForProvinsi = async (provinsiId: string): Promise<number> => {
+          const { data: kabupatenRows, error: kabupatenError } = await adminClient
+            .from("kabupaten_kota")
+            .select("id")
+            .eq("provinsi_id", provinsiId);
+          if (kabupatenError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Desa/Kelurahan belum dapat dimuat." });
+          if (!kabupatenRows || kabupatenRows.length === 0) return 0;
+          const kabupatenIds = kabupatenRows.map((k) => k.id);
+          let query = adminClient
+            .from("desa")
+            .select("id", { count: "exact", head: true })
+            .in("kabupaten_kota_id", kabupatenIds);
+          if (filter === "active") query = query.eq("is_active", true);
+          else if (filter === "inactive") query = query.eq("is_active", false);
+          const { count, error } = await query;
+          if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Desa/Kelurahan belum dapat dimuat." });
+          return count ?? 0;
+        };
+        if (input?.provinsiId) {
+          return [{ provinsiId: input.provinsiId, count: await countForProvinsi(input.provinsiId) }];
+        }
+        const { data: provinsiRows, error: provinsiError } = await adminClient.from("provinsi").select("id");
+        if (provinsiError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Desa/Kelurahan belum dapat dimuat." });
+        const results: { provinsiId: string; count: number }[] = [];
+        for (const row of provinsiRows ?? []) {
+          results.push({ provinsiId: row.id, count: await countForProvinsi(row.id) });
+        }
+        return results;
+      }),
+    listOutletCountByProvinsi: publicProcedure
+      .input(z.object({ provinsiId: z.string().uuid().optional(), filter: z.enum(["active", "inactive", "all"]).optional() }).optional())
+      .query(async ({ input }) => {
+        const adminClient = getSupabaseAdminClient();
+        const filter = input?.filter ?? "active";
+        const countForProvinsi = async (provinsiId: string): Promise<number> => {
+          const { data: kabupatenRows, error: kabupatenError } = await adminClient
+            .from("kabupaten_kota")
+            .select("id")
+            .eq("provinsi_id", provinsiId);
+          if (kabupatenError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Outlet belum dapat dimuat." });
+          if (!kabupatenRows || kabupatenRows.length === 0) return 0;
+          const kabupatenIds = kabupatenRows.map((k) => k.id);
+          let desaQuery = adminClient.from("desa").select("id").in("kabupaten_kota_id", kabupatenIds);
+          if (filter === "active") desaQuery = desaQuery.eq("is_active", true);
+          else if (filter === "inactive") desaQuery = desaQuery.eq("is_active", false);
+          const { data: desaRows, error: desaError } = await desaQuery;
+          if (desaError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Outlet belum dapat dimuat." });
+          if (!desaRows || desaRows.length === 0) return 0;
+          const desaIds = desaRows.map((d) => d.id);
+          let query = adminClient
+            .from("outlets")
+            .select("id", { count: "exact", head: true })
+            .in("desa_id", desaIds)
+            .not("desa_id", "is", null);
+          const { count, error } = await query;
+          if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Outlet belum dapat dimuat." });
+          return count ?? 0;
+        };
+        if (input?.provinsiId) {
+          return [{ provinsiId: input.provinsiId, count: await countForProvinsi(input.provinsiId) }];
+        }
+        const { data: provinsiRows, error: provinsiError } = await adminClient.from("provinsi").select("id");
+        if (provinsiError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Outlet belum dapat dimuat." });
+        const results: { provinsiId: string; count: number }[] = [];
+        for (const row of provinsiRows ?? []) {
+          results.push({ provinsiId: row.id, count: await countForProvinsi(row.id) });
+        }
+        return results;
+      }),
+    listOutletCountByKabupatenKota: publicProcedure
+      .input(z.object({ provinsiId: z.string().uuid(), filter: z.enum(["active", "inactive", "all"]).optional() }))
+      .query(async ({ input }) => {
+        const adminClient = getSupabaseAdminClient();
+        const filter = input?.filter ?? "active";
+        const { data: kabupatenRows, error: kabupatenError } = await adminClient
+          .from("kabupaten_kota")
+          .select("id")
+          .eq("provinsi_id", input.provinsiId);
+        if (kabupatenError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Outlet belum dapat dimuat." });
+        const countForKabupaten = async (kabupatenKotaId: string): Promise<number> => {
+          let desaQuery = adminClient.from("desa").select("id").eq("kabupaten_kota_id", kabupatenKotaId);
+          if (filter === "active") desaQuery = desaQuery.eq("is_active", true);
+          else if (filter === "inactive") desaQuery = desaQuery.eq("is_active", false);
+          const { data: desaRows, error: desaError } = await desaQuery;
+          if (desaError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Outlet belum dapat dimuat." });
+          if (!desaRows || desaRows.length === 0) return 0;
+          const desaIds = desaRows.map((d) => d.id);
+          let query = adminClient
+            .from("outlets")
+            .select("id", { count: "exact", head: true })
+            .in("desa_id", desaIds)
+            .not("desa_id", "is", null);
+          const { count, error } = await query;
+          if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Outlet belum dapat dimuat." });
+          return count ?? 0;
+        };
+        const results: { kabupatenKotaId: string; count: number }[] = [];
+        for (const kabupaten of kabupatenRows ?? []) {
+          results.push({ kabupatenKotaId: kabupaten.id, count: await countForKabupaten(kabupaten.id) });
+        }
+        return results;
+      }),
+    listOutletCountByKecamatan: publicProcedure
+      .input(z.object({ kabupatenKotaId: z.string().uuid(), filter: z.enum(["active", "inactive", "all"]).optional() }))
+      .query(async ({ input }) => {
+        const adminClient = getSupabaseAdminClient();
+        const filter = input?.filter ?? "active";
+        const { data: kecamatanRows, error: kecamatanError } = await adminClient
+          .from("kecamatan")
+          .select("id")
+          .eq("kabupaten_kota_id", input.kabupatenKotaId);
+        if (kecamatanError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Outlet belum dapat dimuat." });
+        const countForKecamatan = async (kecamatanId: string): Promise<number> => {
+          let desaQuery = adminClient.from("desa").select("id").eq("kecamatan_id", kecamatanId);
+          if (filter === "active") desaQuery = desaQuery.eq("is_active", true);
+          else if (filter === "inactive") desaQuery = desaQuery.eq("is_active", false);
+          const { data: desaRows, error: desaError } = await desaQuery;
+          if (desaError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Outlet belum dapat dimuat." });
+          if (!desaRows || desaRows.length === 0) return 0;
+          const desaIds = desaRows.map((d) => d.id);
+          let query = adminClient
+            .from("outlets")
+            .select("id", { count: "exact", head: true })
+            .in("desa_id", desaIds)
+            .not("desa_id", "is", null);
+          const { count, error } = await query;
+          if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Outlet belum dapat dimuat." });
+          return count ?? 0;
+        };
+        const results: { kecamatanId: string; count: number }[] = [];
+        for (const kecamatan of kecamatanRows ?? []) {
+          results.push({ kecamatanId: kecamatan.id, count: await countForKecamatan(kecamatan.id) });
+        }
+        return results;
+      }),
+    listOutletCountByDesa: publicProcedure
+      .input(z.object({ kecamatanId: z.string().uuid(), filter: z.enum(["active", "inactive", "all"]).optional() }))
+      .query(async ({ input }) => {
+        const adminClient = getSupabaseAdminClient();
+        const filter = input?.filter ?? "active";
+        let desaQuery = adminClient.from("desa").select("id").eq("kecamatan_id", input.kecamatanId);
+        if (filter === "active") desaQuery = desaQuery.eq("is_active", true);
+        else if (filter === "inactive") desaQuery = desaQuery.eq("is_active", false);
+        const { data: desaRows, error: desaError } = await desaQuery;
+        if (desaError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Outlet belum dapat dimuat." });
+        const countForDesa = async (desaId: string): Promise<number> => {
+          let query = adminClient
+            .from("outlets")
+            .select("id", { count: "exact", head: true })
+            .eq("desa_id", desaId);
+          const { count, error } = await query;
+          if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Jumlah Outlet belum dapat dimuat." });
+          return count ?? 0;
+        };
+        const results: { desaId: string; count: number }[] = [];
+        for (const desa of desaRows ?? []) {
+          results.push({ desaId: desa.id, count: await countForDesa(desa.id) });
+        }
+        return results;
+      }),
   }),
   mitraProductionStock: router({
     list: supabaseProtectedProcedure.query(async ({ ctx }) => {

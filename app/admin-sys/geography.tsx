@@ -75,6 +75,52 @@ export default function AdminSysGeographyScreen() {
     { enabled: currentLevel === "desa" && Boolean(selectedKecamatan?.id) }
   );
 
+  // Count queries for child counts
+  const kabupatenKotaCountQuery = trpc.distribution.listKabupatenKotaCountByProvinsi.useQuery(
+    { filter: kabupatenKotaFilter },
+    { enabled: currentLevel === "provinsi" }
+  );
+  const kecamatanCountQuery = trpc.distribution.listKecamatanCountByKabupatenKota.useQuery(
+    { provinsiId: selectedProvinsi?.id ?? "", filter: kecamatanFilter },
+    { enabled: currentLevel === "kabupaten_kota" && Boolean(selectedProvinsi?.id) }
+  );
+  const desaCountQuery = trpc.distribution.listDesaCountByKecamatan.useQuery(
+    { kabupatenKotaId: selectedKabupatenKota?.id ?? "", filter: desaFilter },
+    { enabled: currentLevel === "kecamatan" && Boolean(selectedKabupatenKota?.id) }
+  );
+  // For Provinsi level: get Kecamatan count per Provinsi
+  const kecamatanCountByProvinsiQuery = trpc.distribution.listKecamatanCountByProvinsi.useQuery(
+    { filter: kabupatenKotaFilter },
+    { enabled: currentLevel === "provinsi" }
+  );
+  // For Kabupaten/Kota level: get Desa count per Kabupaten/Kota
+  const desaCountByKabupatenKotaQuery = trpc.distribution.listDesaCountByKabupatenKota.useQuery(
+    { provinsiId: selectedProvinsi?.id ?? "", filter: desaFilter },
+    { enabled: currentLevel === "kabupaten_kota" && Boolean(selectedProvinsi?.id) }
+  );
+  // For Provinsi level: get Desa count per Provinsi
+  const desaCountByProvinsiQuery = trpc.distribution.listDesaCountByProvinsi.useQuery(
+    { filter: desaFilter },
+    { enabled: currentLevel === "provinsi" }
+  );
+  // Outlet count queries (attached at Desa level via outlets.desa_id; filter follows desaFilter)
+  const outletCountByProvinsiQuery = trpc.distribution.listOutletCountByProvinsi.useQuery(
+    { filter: desaFilter },
+    { enabled: currentLevel === "provinsi" }
+  );
+  const outletCountByKabupatenKotaQuery = trpc.distribution.listOutletCountByKabupatenKota.useQuery(
+    { provinsiId: selectedProvinsi?.id ?? "", filter: desaFilter },
+    { enabled: currentLevel === "kabupaten_kota" && Boolean(selectedProvinsi?.id) }
+  );
+  const outletCountByKecamatanQuery = trpc.distribution.listOutletCountByKecamatan.useQuery(
+    { kabupatenKotaId: selectedKabupatenKota?.id ?? "", filter: desaFilter },
+    { enabled: currentLevel === "kecamatan" && Boolean(selectedKabupatenKota?.id) }
+  );
+  const outletCountByDesaQuery = trpc.distribution.listOutletCountByDesa.useQuery(
+    { kecamatanId: selectedKecamatan?.id ?? "", filter: desaFilter },
+    { enabled: currentLevel === "desa" && Boolean(selectedKecamatan?.id) }
+  );
+
   // Create Provinsi Mutation
   const createProvinsiMutation = trpc.platform.geography.createProvinsi.useMutation({
     onSuccess: () => {
@@ -340,10 +386,10 @@ export default function AdminSysGeographyScreen() {
 
   // Error mapping helper
   const mapError = (error: { code?: string; message?: string }): string => {
-    if (error.code === "42501") return "Anda tidak memiliki akses.";
-    if (error.code === "22001") return "Nama tidak valid atau melebihi batas karakter.";
-    if (error.code === "22003") return error.message ?? "Operasi tidak dapat dilakukan karena data terkait.";
-    if (error.code === "P0002") return "Data tidak ditemukan.";
+    if (error.code === "FORBIDDEN" || error.code === "42501") return "Anda tidak memiliki akses.";
+    if (error.code === "BAD_REQUEST" || error.code === "22001" || error.code === "22003")
+      return error.message ?? "Data tidak valid atau melebihi batas karakter.";
+    if (error.code === "NOT_FOUND" || error.code === "P0002") return "Data tidak ditemukan.";
     return error.message ?? "Terjadi kesalahan. Silakan coba lagi.";
   };
 
@@ -720,70 +766,107 @@ export default function AdminSysGeographyScreen() {
     if (provinsiQuery.error) return <ErrorView onRetry={() => void provinsiQuery.refetch()} />;
     if (!provinsiQuery.data || provinsiQuery.data.length === 0) return <EmptyView message="Belum ada provinsi." />;
 
+    // Build count maps
+    const kabCountMap = new Map<string, number>();
+    kabupatenKotaCountQuery.data?.forEach((item) => {
+      if (item?.provinsiId) kabCountMap.set(item.provinsiId, item.count);
+    });
+
+    const kecCountMap = new Map<string, number>();
+    kecamatanCountByProvinsiQuery.data?.forEach((item) => {
+      if (item?.provinsiId) kecCountMap.set(item.provinsiId, item.count);
+    });
+
+    const desaCountMap = new Map<string, number>();
+    desaCountByProvinsiQuery.data?.forEach((item) => {
+      if (item?.provinsiId) desaCountMap.set(item.provinsiId, item.count);
+    });
+
+    const outletCountMap = new Map<string, number>();
+    outletCountByProvinsiQuery.data?.forEach((item) => {
+      if (item?.provinsiId) outletCountMap.set(item.provinsiId, item.count);
+    });
+
     return (
       <FlatList
         data={provinsiQuery.data}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => handleSelectProvinsi(item)}
-            style={styles.listItem}
-          >
-            <View style={styles.itemContent}>
-              <Text style={[styles.itemTitle, { color: colors.foreground }]}>{item.nama}</Text>
-              <View style={styles.statusRow}>
-                <View style={[
-                  styles.statusBadge,
-                  item.isActive ? styles.statusActive : styles.statusInactive,
-                ]}>
-                  <Text style={styles.statusBadgeText}>{item.isActive ? "Aktif" : "Tidak Aktif"}</Text>
+        renderItem={({ item }) => {
+          const kabCount = kabCountMap.get(item.id) ?? 0;
+          const kecCount = kecCountMap.get(item.id) ?? 0;
+          const desaCount = desaCountMap.get(item.id) ?? 0;
+          const outletCount = outletCountMap.get(item.id) ?? 0;
+
+          return (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => handleSelectProvinsi(item)}
+              style={styles.listItem}
+            >
+              <View style={styles.itemContent}>
+                <Text style={[styles.itemTitle, { color: colors.foreground }]}>{item.nama}</Text>
+                <View style={styles.countRow}>
+                  <View style={styles.countBadge}>
+                    <AppIcon name="building" size={14} color={colors.primary} />
+                    <Text style={styles.countBadgeText}>{kabCount} Kab/Kota</Text>
+                  </View>
+                  <View style={styles.countBadge}>
+                    <AppIcon name="building" size={14} color={colors.primary} />
+                    <Text style={styles.countBadgeText}>{kecCount} Kec</Text>
+                  </View>
+                  <View style={styles.countBadge}>
+                    <AppIcon name="house" size={14} color={colors.primary} />
+                    <Text style={styles.countBadgeText}>{desaCount} Desa</Text>
+                  </View>
+                  <View style={styles.countBadge}>
+                    <AppIcon name="cart" size={14} color={colors.primary} />
+                    <Text style={styles.countBadgeText}>{outletCount} Outlet</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-            <View style={styles.itemActions}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Edit ${item.nama}`}
-                onPress={() => {
-                  setEditProvinsiId(item.id);
-                  setEditProvinsiName(item.nama);
-                  setShowEditProvinsiModal(true);
-                }}
-                style={styles.actionButton}
-              >
-                <AppIcon name="edit" size={20} color={colors.primary} />
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={item.isActive ? `Nonaktifkan ${item.nama}` : `Aktifkan ${item.nama}`}
-                onPress={() => handleSetProvinsiActive(item.id, !item.isActive)}
-                style={styles.actionButton}
-              >
-                <AppIcon name={item.isActive ? "eye-off" : "eye"} size={20} color={item.isActive ? colors.error : colors.success} />
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Hapus ${item.nama}`}
-                onPress={() => {
-                  Alert.alert(
-                    "Hapus Provinsi?",
-                    `Hapus "${item.nama}"? Data tidak dapat dipulihkan.`,
-                    [
-                      { text: "Batal", style: "cancel" },
-                      { text: "Hapus", style: "destructive", onPress: () => handleDeleteProvinsi(item.id) },
-                    ]
-                  );
-                }}
-                style={styles.actionButton}
-              >
-                <AppIcon name="delete" size={20} color={colors.error} />
-              </Pressable>
-            </View>
-          </Pressable>
-        )}
+              <View style={styles.itemActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${item.nama}`}
+                  onPress={() => {
+                    setEditProvinsiId(item.id);
+                    setEditProvinsiName(item.nama);
+                    setShowEditProvinsiModal(true);
+                  }}
+                  style={styles.actionButton}
+                >
+                  <AppIcon name="edit" size={20} color={colors.primary} />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={item.isActive ? `Nonaktifkan ${item.nama}` : `Aktifkan ${item.nama}`}
+                  onPress={() => handleSetProvinsiActive(item.id, !item.isActive)}
+                  style={styles.actionButton}
+                >
+                  <AppIcon name={item.isActive ? "eye-off" : "eye"} size={20} color={item.isActive ? colors.error : colors.success} />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Hapus ${item.nama}`}
+                  onPress={() => {
+                    Alert.alert(
+                      "Hapus Provinsi?",
+                      `Hapus "${item.nama}"? Data tidak dapat dipulihkan.`,
+                      [
+                        { text: "Batal", style: "cancel" },
+                        { text: "Hapus", style: "destructive", onPress: () => handleDeleteProvinsi(item.id) },
+                      ]
+                    );
+                  }}
+                  style={styles.actionButton}
+                >
+                  <AppIcon name="delete" size={20} color={colors.error} />
+                </Pressable>
+              </View>
+            </Pressable>
+          )}}
       />
     );
   };
@@ -794,6 +877,22 @@ export default function AdminSysGeographyScreen() {
     if (kabupatenKotaQuery.isLoading) return <LoadingView />;
     if (kabupatenKotaQuery.error) return <ErrorView onRetry={() => void kabupatenKotaQuery.refetch()} />;
     if (!kabupatenKotaQuery.data || kabupatenKotaQuery.data.length === 0) return <EmptyView message="Belum ada Kabupaten/Kota di provinsi ini." />;
+
+    // Build count maps
+    const kecCountMap = new Map<string, number>();
+    kecamatanCountQuery.data?.forEach((item) => {
+      if (item?.kabupatenKotaId) kecCountMap.set(item.kabupatenKotaId, item.count);
+    });
+
+    const desaCountByKabMap = new Map<string, number>();
+    desaCountByKabupatenKotaQuery.data?.forEach((item) => {
+      if (item?.kabupatenKotaId) desaCountByKabMap.set(item.kabupatenKotaId, item.count);
+    });
+
+    const outletCountByKabMap = new Map<string, number>();
+    outletCountByKabupatenKotaQuery.data?.forEach((item) => {
+      if (item?.kabupatenKotaId) outletCountByKabMap.set(item.kabupatenKotaId, item.count);
+    });
 
     return (
       <FlatList
@@ -815,6 +914,20 @@ export default function AdminSysGeographyScreen() {
                   item.isActive ? styles.statusActive : styles.statusInactive,
                 ]}>
                   <Text style={styles.statusBadgeText}>{item.isActive ? "Aktif" : "Tidak Aktif"}</Text>
+                </View>
+                <View style={styles.countRow}>
+                  <View style={styles.countBadge}>
+                    <AppIcon name="building" size={14} color={colors.primary} />
+                    <Text style={styles.countBadgeText}>{kecCountMap.get(item.id) ?? 0} Kec</Text>
+                  </View>
+                  <View style={styles.countBadge}>
+                    <AppIcon name="house" size={14} color={colors.primary} />
+                    <Text style={styles.countBadgeText}>{desaCountByKabMap.get(item.id) ?? 0} Desa</Text>
+                  </View>
+                  <View style={styles.countBadge}>
+                    <AppIcon name="cart" size={14} color={colors.primary} />
+                    <Text style={styles.countBadgeText}>{outletCountByKabMap.get(item.id) ?? 0} Outlet</Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -870,6 +983,17 @@ export default function AdminSysGeographyScreen() {
     if (kecamatanQuery.error) return <ErrorView onRetry={() => void kecamatanQuery.refetch()} />;
     if (!kecamatanQuery.data || kecamatanQuery.data.length === 0) return <EmptyView message="Belum ada Kecamatan di Kabupaten/Kota ini." />;
 
+    // Build Desa count map
+    const desaCountMap = new Map<string, number>();
+    desaCountQuery.data?.forEach((item) => {
+      if (item?.kecamatanId) desaCountMap.set(item.kecamatanId, item.count);
+    });
+
+    const outletCountByKecMap = new Map<string, number>();
+    outletCountByKecamatanQuery.data?.forEach((item) => {
+      if (item?.kecamatanId) outletCountByKecMap.set(item.kecamatanId, item.count);
+    });
+
     return (
       <FlatList
         data={kecamatanQuery.data}
@@ -890,6 +1014,16 @@ export default function AdminSysGeographyScreen() {
                   item.isActive ? styles.statusActive : styles.statusInactive,
                 ]}>
                   <Text style={styles.statusBadgeText}>{item.isActive ? "Aktif" : "Tidak Aktif"}</Text>
+                </View>
+                <View style={styles.countRow}>
+                  <View style={styles.countBadge}>
+                    <AppIcon name="house" size={14} color={colors.primary} />
+                    <Text style={styles.countBadgeText}>{desaCountMap.get(item.id) ?? 0} Desa</Text>
+                  </View>
+                  <View style={styles.countBadge}>
+                    <AppIcon name="cart" size={14} color={colors.primary} />
+                    <Text style={styles.countBadgeText}>{outletCountByKecMap.get(item.id) ?? 0} Outlet</Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -945,6 +1079,12 @@ export default function AdminSysGeographyScreen() {
     if (desaQuery.error) return <ErrorView onRetry={() => void desaQuery.refetch()} />;
     if (!desaQuery.data || desaQuery.data.length === 0) return <EmptyView message="Belum ada Desa/Kelurahan di Kecamatan ini." />;
 
+    // Build Outlet count map
+    const outletCountByDesaMap = new Map<string, number>();
+    outletCountByDesaQuery.data?.forEach((item) => {
+      if (item?.desaId) outletCountByDesaMap.set(item.desaId, item.count);
+    });
+
     return (
       <FlatList
         data={desaQuery.data}
@@ -964,6 +1104,12 @@ export default function AdminSysGeographyScreen() {
                   item.isActive ? styles.statusActive : styles.statusInactive,
                 ]}>
                   <Text style={styles.statusBadgeText}>{item.isActive ? "Aktif" : "Tidak Aktif"}</Text>
+                </View>
+                <View style={styles.countRow}>
+                  <View style={styles.countBadge}>
+                    <AppIcon name="cart" size={14} color={colors.primary} />
+                    <Text style={styles.countBadgeText}>{outletCountByDesaMap.get(item.id) ?? 0} Outlet</Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -2169,6 +2315,9 @@ const styles = StyleSheet.create({
   statusActive: { backgroundColor: "#E8F5E9" },
   statusInactive: { backgroundColor: "#FFEBEE" },
   statusBadgeText: { fontSize: 10, fontWeight: "700" },
+  countRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" },
+  countBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: "#F0F4FF" },
+  countBadgeText: { fontSize: 10, fontWeight: "700", color: "#555555" },
   itemActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   actionButton: { padding: 4 },
 });
