@@ -13,6 +13,7 @@ import { calculateHppSummary, type HppComponent } from "../shared/hpp";
 import type { BudgetPeriod } from "../shared/budgets";
 import { z } from "zod";
 import type { AssignmentHistoryEntry, OutletRecord, RuteDetail, SalesRecord, WilayahDetail, WilayahRecord, DayOfWeek } from "../shared/distribution";
+import { syncUserMirrors, removeUserMirror, rollbackProvisionedUser } from "./provisioning";
 
 const roleSchema = z.enum(["distributor", "admin", "mitra_umkm", "supervisor", "sales_motoris", "hrd"]);
 const emailSchema = z.string().trim().toLowerCase().email().max(320);
@@ -974,11 +975,22 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: error?.message ?? "Pendaftaran belum dapat diproses." });
         }
 
+        await syncUserMirrors(adminClient, {
+          id: data.user.id,
+          email: data.user.email ?? null,
+          role: "distributor",
+          status: "active",
+          distributorId: data.user.id,
+          name: input.name,
+          phone: input.phone,
+        });
+
         const extension = input.ktpContentType === "image/png" ? "png" : input.ktpContentType === "image/webp" ? "webp" : "jpg";
         const ktpStoragePath = `${data.user.id}/${data.user.id}/${crypto.randomUUID()}.${extension}`;
         const base64Payload = input.ktpBase64.replace(/^data:[^;]+;base64,/, "");
         const ktpBytes = Buffer.from(base64Payload, "base64");
         if (ktpBytes.byteLength === 0 || ktpBytes.byteLength > 5242880) {
+          await rollbackProvisionedUser(adminClient, data.user.id);
           await adminClient.auth.admin.deleteUser(data.user.id);
           throw new TRPCError({ code: "BAD_REQUEST", message: "Ukuran foto KTP maksimal 5 MB." });
         }
@@ -988,6 +1000,7 @@ export const appRouter = router({
           upsert: false,
         });
         if (uploadError) {
+          await rollbackProvisionedUser(adminClient, data.user.id);
           await adminClient.auth.admin.deleteUser(data.user.id);
           throw new TRPCError({ code: "BAD_REQUEST", message: "Foto KTP belum dapat disimpan." });
         }
@@ -1007,6 +1020,7 @@ export const appRouter = router({
         });
         if (profileError) {
           await adminClient.storage.from("user-ktp").remove([ktpStoragePath]);
+          await rollbackProvisionedUser(adminClient, data.user.id);
           await adminClient.auth.admin.deleteUser(data.user.id);
           throw new TRPCError({ code: "BAD_REQUEST", message: "Data profil belum dapat disimpan." });
         }
@@ -1019,6 +1033,7 @@ export const appRouter = router({
         if (confirmationError) {
           await adminClient.storage.from("user-ktp").remove([ktpStoragePath]);
           await adminClient.from("user_profiles").delete().eq("user_id", data.user.id);
+          await rollbackProvisionedUser(adminClient, data.user.id);
           await adminClient.auth.admin.deleteUser(data.user.id);
           throw new TRPCError({ code: "BAD_REQUEST", message: "Email konfirmasi belum dapat dikirim." });
         }
@@ -1091,11 +1106,22 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: error?.message ?? "Akun belum dapat dibuat." });
         }
 
+        await syncUserMirrors(adminClient, {
+          id: data.user.id,
+          email: data.user.email ?? null,
+          role: input.role,
+          status: "active",
+          distributorId,
+          name: input.name,
+          phone: input.phone,
+        });
+
         const extension = input.ktpContentType === "image/png" ? "png" : input.ktpContentType === "image/webp" ? "webp" : "jpg";
         const ktpStoragePath = `${distributorId}/${data.user.id}/${crypto.randomUUID()}.${extension}`;
         const base64Payload = input.ktpBase64.replace(/^data:[^;]+;base64,/, "");
         const ktpBytes = Buffer.from(base64Payload, "base64");
         if (ktpBytes.byteLength === 0 || ktpBytes.byteLength > 5242880) {
+          await rollbackProvisionedUser(adminClient, data.user.id);
           await adminClient.auth.admin.deleteUser(data.user.id);
           throw new TRPCError({ code: "BAD_REQUEST", message: "Ukuran foto KTP maksimal 5 MB." });
         }
@@ -1105,6 +1131,7 @@ export const appRouter = router({
           upsert: false,
         });
         if (uploadError) {
+          await rollbackProvisionedUser(adminClient, data.user.id);
           await adminClient.auth.admin.deleteUser(data.user.id);
           throw new TRPCError({ code: "BAD_REQUEST", message: "Foto KTP belum dapat disimpan." });
         }
@@ -1124,6 +1151,7 @@ export const appRouter = router({
         });
         if (profileError) {
           await adminClient.storage.from("user-ktp").remove([ktpStoragePath]);
+          await rollbackProvisionedUser(adminClient, data.user.id);
           await adminClient.auth.admin.deleteUser(data.user.id);
           throw new TRPCError({ code: "BAD_REQUEST", message: "Data profil pengguna belum dapat disimpan." });
         }
@@ -1171,6 +1199,14 @@ export const appRouter = router({
         if (error || !data.user) {
           throw new TRPCError({ code: "BAD_REQUEST", message: error?.message ?? "Akun belum dapat diperbarui." });
         }
+        await syncUserMirrors(adminClient, {
+          id: data.user.id,
+          email: data.user.email ?? null,
+          role: input.role,
+          status: input.status,
+          distributorId: input.role === "distributor" ? data.user.id : getDistributorId(ctx.supabaseUser),
+          name: input.name,
+        });
         await adminClient.from("user_profiles").update({ full_name: input.name, updated_at: new Date().toISOString() }).eq("user_id", input.userId);
         return toManagedUser(data.user);
       }),
@@ -1201,6 +1237,8 @@ export const appRouter = router({
             throw new TRPCError({ code: "BAD_REQUEST", message: "Akun memiliki riwayat stok/transaksi. Nonaktifkan akun saja." });
           }
         }
+
+        await removeUserMirror(adminClient, input.userId);
 
         const { error } = await adminClient.auth.admin.deleteUser(input.userId);
         if (error) {
