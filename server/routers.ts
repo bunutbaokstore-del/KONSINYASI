@@ -2399,7 +2399,8 @@ export const appRouter = router({
       if (!distributorId) throw new TRPCError({ code: "FORBIDDEN", message: "Ruang kerja Distributor tidak ditemukan." });
       const hasOutletData = input.nama !== undefined || input.alamat !== undefined || input.latitude !== undefined || input.longitude !== undefined;
       const hasDesaId = input.desaId !== undefined;
-      if (!hasOutletData && !hasDesaId) {
+      const hasVisitDays = input.visitDays !== undefined;
+      if (!hasOutletData && !hasDesaId && !hasVisitDays) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Tidak ada data yang diubah." });
       }
       if (input.nama !== undefined || input.alamat !== undefined || input.latitude !== undefined || input.longitude !== undefined) {
@@ -2431,6 +2432,21 @@ export const appRouter = router({
       }
       // Fetch outlet to return fresh data including visitDays
       const adminClient = getSupabaseAdminClient();
+
+      // Persist visit schedule via the deployed RPC (atomic replace; empty array wipes schedule)
+      let scheduleDays: DayOfWeek[] = [];
+      if (input.visitDays !== undefined) {
+        const { data: rpcData, error: rpcError } = await adminClient.rpc("bulk_upsert_outlet_visit_schedule", {
+          p_outlet_id: input.outletId,
+          p_days: input.visitDays,
+          p_distributor_id: distributorId,
+          p_assigned_by: ctx.supabaseUser!.id,
+        });
+        if (rpcError) rpcFailure(rpcError);
+        const row = Array.isArray(rpcData) ? rpcData?.[0] : rpcData;
+        scheduleDays = Array.isArray(row?.days) ? (row.days as DayOfWeek[]) : input.visitDays;
+      }
+
       const { data: outletData } = await adminClient.from("outlets").select("id, distributor_id, kode, nama, alamat, latitude, longitude, status, created_at, updated_at, desa_id").eq("id", input.outletId).eq("distributor_id", distributorId).maybeSingle();
 
       // Fetch geographical info for the outlet if it has desa_id
@@ -2458,7 +2474,7 @@ export const appRouter = router({
         }
       }
 
-      return toOutletRecord(outletData!, null, null, [], desaInfo);
+      return toOutletRecord(outletData!, null, null, scheduleDays, desaInfo);
       }),
     setOutletActive: adminTenantProcedure.mutation(
       z.object({ outletId: z.string().uuid(), isActive: z.boolean() }),
