@@ -89,6 +89,7 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="admin" />
+            <Stack.Screen name="admin-sys" />
             <Stack.Screen name="oauth/callback" />
             <Stack.Screen name="auth/callback" />
             <Stack.Screen name="reset-password" />

@@ -12,6 +12,8 @@ const MAPPING = {
   "chevron.left.forwardslash.chevron.right": "code",
   "chevron.right": "chevron-right",
   "map.fill": "map",
+  "chart.bar.fill": "chart-bar",
+  "gear.fill": "gear",
 } as const satisfies Record<string, AppIconName>;
 
 type IconSymbolName = keyof typeof MAPPING;

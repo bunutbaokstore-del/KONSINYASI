@@ -29,7 +29,10 @@ export type AppIconName =
   | "eye-off"
   | "upload"
   | "notifications"
-  | "map";
+  | "map"
+  | "chart-bar"
+  | "gear"
+  | "building-2";
 
 type AppIconProps = {
   name: AppIconName;
@@ -100,5 +103,11 @@ export function AppIcon({ name, size = 24, color, strokeWidth = 2 }: AppIconProp
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M6 10a6 6 0 0 1 12 0v4l2 2H4l2-2z" /><Path {...common} d="M10 19h4" /></Svg>;
     case "map":
       return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z" /><Path {...common} d="M15 5.764v15M9 3.236v15" /></Svg>;
+    case "chart-bar":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M3 3v18h18" /><Path {...common} d="m7 16 4-4 4 4 4-8" /></Svg>;
+    case "gear":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Circle {...common} cx="12" cy="12" r="3" /><Path {...common} d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" /></Svg>;
+    case "building-2":
+      return <Svg width={size} height={size} viewBox="0 0 24 24"><Path {...common} d="M5 20V5.5L14 4v16M14 8h5v12M8 8h3M8 11h3M8 14h3M16 11h1M16 14h1M3.5 20h17M5 4v16M19 4v16" /></Svg>;
   }
 }

@@ -37,9 +37,10 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!loading && isAuthenticated && isGenericHome) {
+      if (user?.platformRole === "sys_admin") router.replace("/admin-sys" as never);
       if (user?.role === "admin") router.replace("/admin" as never);
     }
-  }, [isGenericHome, isAuthenticated, loading, router, user?.role]);
+  }, [isGenericHome, isAuthenticated, loading, router, user?.platformRole, user?.role]);
 
   const handleLogin = async () => {
     const normalizedEmail = email.trim().toLowerCase();
