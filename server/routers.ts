@@ -778,7 +778,10 @@ export const appRouter = router({
             if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
             if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
             if (error.code === "22001") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Desa/Kelurahan belum dapat diperbarui." });
+            if (error.code === "22003") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+            if (error.code === "23503") throw new TRPCError({ code: "BAD_REQUEST", message: "Desa/Kelurahan tidak dapat diperbarui karena masih memiliki referensi data lain." });
+            if (error.code === "23505") throw new TRPCError({ code: "BAD_REQUEST", message: "Nama Desa/Kelurahan sudah digunakan." });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message ?? "Desa/Kelurahan belum dapat diperbarui." });
           }
           return data;
         }),
@@ -934,7 +937,10 @@ export const appRouter = router({
             if (error.code === "42501") throw new TRPCError({ code: "FORBIDDEN", message: error.message });
             if (error.code === "P0002") throw new TRPCError({ code: "NOT_FOUND", message: error.message });
             if (error.code === "22003") throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
-            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Desa/Kelurahan belum dapat dihapus." });
+            // Handle additional PostgreSQL error codes
+            if (error.code === "23503") throw new TRPCError({ code: "BAD_REQUEST", message: "Desa/Kelurahan tidak dapat dihapus karena masih memiliki referensi data lain." });
+            if (error.code === "23505") throw new TRPCError({ code: "BAD_REQUEST", message: "Kode Desa/Kelurahan sudah digunakan." });
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message ?? "Desa/Kelurahan belum dapat dihapus." });
           }
           return { success: true };
         }),
